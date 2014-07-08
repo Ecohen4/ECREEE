@@ -1,0 +1,387 @@
+<link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>
+
+Introduction to Data Analysis with R
+=================
+
+We recommend that at some point soon following this tutorial, you watch the following [video tutorial for R from Google Developer](http://www.youtube.com/watch?v=iffR3fWv4xw&list=PLOU2XLYxmsIK9qQfztXeybpHvru-TrqAP).
+
+Getting Started
+-----------------
+### Interface of Rstudio
+
+![alt text][R_studio]
+
+[R_studio]: https://lh3.googleusercontent.com/-fFe1VlFiVzA/TWvS0Cuvc3I/AAAAAAAALmk/RfFLB0h5dUM/s1600/rstudio-windows.png
+
+Interface components:
+* Console
+* Script
+* Environment (will make sense later)
+* Help, Plots
+
+### Working directory 
+
+R has a notion of a "working directory". This is the directory that R can load files directly from.
+
+```{r}
+# get the current working directory 
+getwd()
+
+# set "my working directory"
+#setwd("~/work/r/nigeria_r_training/")
+setwd("~/github/Nigeria_R_Training")
+```
+
+### Get help!
+
+Before we get any further, lets see how to get help. You can go to the "Help" tab in R-studio (right-hand-side bottom), or if you know the function to get help on, just use a question mark followed by the function name.
+```
+?getwd
+```
+
+Use two question marks to search for functions if you don't know the name:
+```
+??workingdirectory
+```
+
+### Reading data
+
+There are many different data formats in wide use, each with it's own purpose and limitations. A few of the most common for use in R include:
+* .csv
+* .xlsx
+* .txt
+* .ncdf
+
+.csv is the prefered data format for importing into R. Although there are functions in R to read other data formats (a few examples, below), we recommend that you convert to csv prior to loading. Motivation for using csv is found [here](http://dataprotocols.org/simple-data-format/#why-csv).
+
+You may also load data directly from other statistical packages such as EpiInfo, Minitab, S-PLUS, SAS, SPSS, Stata and Systat. For a more complete description of data formats and their compatability with R, refer [here] (http://cran.r-project.org/doc/manuals/r-release/R-data.html#Importing-from-other-statistical-systems).
+
+```{r import-data, cache=TRUE}
+### csv
+# Nigeria facility inventory
+sample_data <- read.csv("sample_health_facilities.csv", stringsAsFactors=FALSE)
+str(sample_data)
+
+### txt 
+# Daily mean temperature for Delhi, India 1995-2013 in degrees Farenheit
+temps<-read.table(file="Daily_Temperature_1995-2013_Delhi.txt", header=FALSE, colClasses=c("factor", "factor","factor","numeric"))
+names(temps)<-c("Month","Day","Year","Temp")
+temps$Date<-as.Date(as.character(paste(temps$Year, temps$Month, temps$Day,sep="-")), "%Y-%m-%d")
+range(temps$Date)                  # "1995-01-01" "2013-05-06"
+temps$City<-"DELHI"
+temps$Temp[temps$Temp==-99]<-NA     # remove erroneous entries...
+temps$Temp<-(temps$Temp-32)*(5/9)   # convert to Celcius
+str(temps)
+
+### xlsx 
+# Population of urban agglomerations with 750,00 inhabitants or more, 1950-2025 (UN 2011)
+if (!require(xlsx)) install.packages('xlsx')
+library(xlsx)
+pop=read.xlsx(file="UN_2011_Population_Cities_Over_750k.xlsx",
+              sheetName="CITIES-OVER-750K",
+              as.data.frame=TRUE,header=TRUE,check.names=TRUE,
+              startRow=13, endRow=646, colIndex=c(1:23))
+str(pop)
+
+### scan directly from a website
+# country metadata
+countries<-scan("http://download.geonames.org/export/dump/countryInfo.txt", what=list("","","","",""), flush=TRUE, comment.char="#", sep = "\t", strip.white=TRUE, allowEscapes=TRUE)
+str(countries)
+
+### fixed width
+# list of cities from Hadley Urban Analysis
+file<-"http://www.metoffice.gov.uk/hadobs/urban/data/Station_list1.txt"
+stns<-read.fwf(file, widths=c(5,18,7,7), header = FALSE, sep = "\t", skip = 5, strip.white=TRUE)
+names(stns)<-c("WMONo", "Stn.name","Lat","Long")
+str(stns)
+
+```
+
+This command calls read.csv on a filename, with an extra named argument, `stringsAsFactors`. The result is then assigned to sample_data. This command is equivalent to running `sample_data = read.csv(sample_health_facilities.csv, stringsAsFactors=FALSE)`, but the preferred syntax for assignment in R is `<-` (ie, `<` followed by `-`.)
+
+### The sample dataset
+
+The dataset is a subset of our health dataset. We're providing you with a small piece of it, so that we can begin to understand things with small datasets, and eventually move on to the bigger datasets that we handle in the NMIS system. 
+
+Have a look at the [dataset here](https://github.com/SEL-Columbia/Nigeria_R_Training/blob/master/sample_health_facilities.csv), or open it in your favorite spreadsheet program (Excel, OpenOffice). We can also click on the name `sample_data` in the Environment panel on the top-left in R-studio, and we'll see the data rendered the way many other programs do.
+
+Each row is a health clinic, either has a c-section or not, has a number of full-time nurses, has a number of lab techs, a management type, and so on. In our actual datasets, there are hundreds of columns like this.
+
+
+data.frame
+--------------
+CSVs represent tabular data, which R is excellent at handling. Turns out that the data we have for NMIS is also tabular data, so we will be working with `data.frame`s in R most of the time.
+
+A data.frame is made up of rows and columns. Lets get the "dimensions" of the data.frame:
+
+```{r}
+dim(sample_data)
+```
+
+This shows that that `sample_data` has 50 rows and 10 columns. The functions `nrow` and `ncol` can give you these values individually:
+
+```{r}
+nrow(sample_data)
+ncol(sample_data)
+```
+
+### Displaying the data.frame
+
+After loading the data.frame, we often want to know what columns are in it (columns usually have names). To check the column names of a dataset, we can use the `colnames` function, or more simply, the `names` function:
+
+```{r message=FALSE}
+names(sample_data)
+```
+
+But that just shows us the "headers" of our dataset, not the values. What happens if you just type sample_data into the console? 
+
+Often, seeing the whole dataset is too much. But it is easy to "take a peek" at your dataset by using `head` (which UNIX users may have heard of already):
+
+```{r}
+head(sample_data)
+```
+
+
+Questions:
+ * How many rows of data did we get out?
+ * Did you count to get your answer? If you did, how could you get your answer from R?
+ * How many columns of data did we get out? How would you check in R?
+ * Could you change the number of rows that head outputs? How would you find out?
+ * Can you create a new data.frame, called `small_sample`, which is just the first 10 rows of `sample_data`?
+
+### Columns in a data.frame
+A column in our data frame is equivalent to either a column in the survey, or a column that we created as a calculation. 
+ 1. using "$" operator and the column's name (eg. dataframe$col_name)
+ 2. using the [,] method, or bracket method (eg. dataframe[,'column_name'])
+
+Examples below. Note! We are using small_sample, which is just the first ten rows of sample_data
+```{r}
+small_sample <- head(sample_data, 10)
+small_sample$lga
+
+small_sample[, "lga"]
+```
+
+We generally prefer the first strategy, but sometimes we'll need to use the second strategy, particularly when working with mulitple columns. Before we go there, though, lets talk about data types in R. Type
+```{r}
+str(sample_data)
+```
+Can anyone guess what this output means?
+
+### Data types in R
+
+Each value is R has a data type, like most languages. Lets see some obvious values first:
+```{r}
+class(1)
+class(TRUE)
+class('Suya')
+```
+
+In R, each column has a single type. Example:
+```{r}
+class(sample_data$lga)
+class(sample_data$num_nurses_fulltime)
+```
+
+The core types in R are:
+  1. numerical
+  2. integer
+  3. boolean
+  4. character
+  5. factors
+    * Generic data type used as alternative to all of the above. We recommend __not__ using excecpt in advanced uses. 
+    * Specifically, there are typically challenges with factor => integer/numeric conversions. We'll talk about this later.
+    * For additional information on working with factors in your data: [More information on Factors](http://www.statmethods.net/input/datatypes.html)
+
+A note: `NA` or __Not Available__ is a internal value in R, and can be of any type. For example, look at the `num_doctors_fulltime` column:
+
+```{r}
+small_sample$num_doctors_fulltime
+class(small_sample$num_doctors_fulltime)
+```
+
+This is incredibly helpful for dealing with survey data. In survey data, NA means 'missing value'. This can happen for many reasons. For example, an enumerator can simply have skipped the question. Or the question may have been skipped because of skip logic (more on that later).
+
+### Rows of a data frame
+
+We have looked at data frame columns so far. Lets look at a row in our dataset. A row in our data set is equavilent to one full survey i.e. one facility (though in this case it is a subset of all the data at the facilty).
+
+NOTE: Indexing starts at 1 in R, not 0. There is no 0th item. 
+
+```{r echo=TRUE}
+small_sample[1, ] # the first row
+small_sample[5, ] # the fifth row
+small_sample[100,] # the 100th row, which doesn't exist
+```
+
+Question: what do you think `class(small_sample[1,])` is?
+
+### More slicing and dicing
+If you remember, we used the [,] operator before. For a `data.frame`, the [,] operator selects one or more rows or columns. The syntax is `data.frame[row, col]`, though row and col can be many things.
+
+The simplest example; lets get the 4th row and 5th column:
+```{r}
+sample_data[4, 5]
+```
+
+In R (like in python), the `:` operator is an operator for making a list of numbers.
+```{r}
+1:5
+sample_data[4:6, 1:5]
+```
+
+Note that the selectors for our [,] operator don't need to be integers. What do the following do?
+
+```
+sample_data[4:6, 'lga']
+sample_data[4:6, c('lga', 'zone')]
+```
+
+We haven't seen `c` before. What does `c` do?
+
+### Summary statistics
+
+R is also called the "the R project for stastical computing. The power of R is in data analysis and statistics, which is why we are working with it. Lets start exploring some of R's very basic statistic functionalities.
+
+The first set of functions will just give you a simple `summary` of the values in a certain column. There are two useful functions for this:
+  * __table()__ should be used for character (string) variables
+  * __summary()__ should be used for numerical or boolean variables
+  
+```{r}
+table(sample_data$zone)
+```
+  
+
+```{r}
+summary(sample_data$num_nurses_fulltime)
+summary(sample_data$c_section_yn)
+```
+
+Note that `table` can also be used for numeric and categorical variables. 
+
+```{r}
+table(sample_data$num_nurses_fulltime)
+table(sample_data$c_section_yn)
+```
+
+Questions:
+ * What is different between table and summary for numerical variables?
+ * What is different between table and summary for boolean ('logical') variables?
+
+#### Sums, Mean, Standard Deviation
+
+Calculating the sum is easy, but it does require some care:
+```{r}
+sum(sample_data$num_nurses_fulltime)
+sum(sample_data$num_nurses_fulltime, na.rm=TRUE)
+```
+There are many numerical functions that return `NA` unless `na.rm` is passed as true, if there are any NAs in  your data (and in NMIS data, there always are):
+
+```{r}
+mean(sample_data$num_nurses_fulltime, na.rm=T)
+```
+
+What do you think the function for calculating standard deviation is? How would you find out?
+
+Libraries
+---------
+R is a programming languages, so it allows you to write "modules" or "libraries" that can be distributed to others. These are called packages in R. To install packges in R, use `install.packages` with quoted package name: 
+```
+install.packages("plyr")
+```   
+
+To load the library (similar to `import` in other languages), you use the `library` function:
+
+```{r}
+if (!require(plyr)) install.packages('plyr')
+library(plyr)
+```
+  
+R packages (or libraries) contain additional specialized functions for different purposes. `plyr` is one of our favorites, and contains very useful functions for aggregating data that we will explore soon. Be sure that the package you are trying to load is installed on your computer.
+```{r}
+if (!require(eaf)) install.packages('eaf')
+library(eaf)
+```
+
+Question: what should you do if you see this error?
+
+Creating new data frames from old data frames
+---------------------
+
+### Subset
+Getting a subset of original data with a handy functions saves a lot of typing
+
+```{r}
+subset(sample_data, lga_id < 500, select=c("lga_id", "lga", "state" ))
+```
+
+
+### Joining columns:
+R supports SQL-like join functionality with `merge`. First lets prepare some data to merge:
+```{r}
+data1 <- subset(sample_data, select=-c(zone, gps))
+head(data1)
+data2 <- unique(subset(sample_data, select=c(state, zone), subset=zone != "Southeast"))
+head(data2)
+```
+
+Inner join:
+```{r}
+inner_join <- merge(data1, data2, by="state")
+```
+
+Outer join:
+```{r}
+outer_join <- merge(data1, data2, by="state", all=TRUE)
+```
+
+Left outer join:
+```{r}
+left_outer_join <- merge(data1, data2, by.x="state",
+                    by.y="state",all.x=TRUE)
+```
+Question: what is the between these three data frames?
+
+We can also concatenate two data.frames together, either column-wise (ie, side-by-side) or row-wise (ie, top-and-bottom). Note that the number of rows have to be same in order to combine side-by-side:
+
+```{r}
+cbind(data1, data2)
+cbind(head(data1), head(data2))
+```
+Question: Can you break down what the last statement did, one by one?
+
+Row-wise concatenation happens with `rbind`. Again, you need the same rows in both data sets:
+```{r}
+data4 <- sample_data[1:5, ]
+data5 <- sample_data[6:10, ]
+rbind(data4, data5)
+```
+
+Use this function with care. If your columns don't align, you'll have a problem:
+```{r}
+rbind(data1, data2)
+```
+
+There is a powerful replacement of `rbind` in the __plyr__ package, called `rbind.fill`. With `rbind` you have to make every column in both data.frames exist and allign (ie, have the same index number), but with `rbind.fill` you need not be concerned. `rbind.fill` finds the corresponding column in data.frame2 and concatenates the data, and if there's no corresponding part it assigns __*NA*__. Do be careful though, you might accidentally concatenate the wrong data frames, and instead of complaining, `rbind.fill` will just fill your dataset with NAs.
+
+```{r cache=TRUE}
+head(rbind.fill(data1, data2))
+```
+
+### Writing out data
+Notice that none of our files have changed so far. If you open `sample_health_facilities.csv`, it is the same as it was. If after some work, we want to save our work, we have to write out our data.frames to the file. This is like hitting the "save" button in Excel, but it isn't done automatically in R; you have to do it expicitly.
+
+Writing csv works like the following:
+```{r cache=TRUE}
+write.csv(sample_data, "./my_output.csv", row.names=FALSE)
+```
+Note the row.names argument. Try to see what the csv looks like if you omit the argument, or change row.names=TRUE. We generally prefer to output csv files without the row.names.
+
+Assignment:
+==========
+Until tomorrow, please do the following activity:
+ * Go to this link (http://bit.ly/1fj3sjD) and download the file into the working directory.
+ * Produce a new dataset, which has the following properties:
+   * Only those facilities in sample_data that are in the Southern zones of Nigeria should be included.
+   * You should incorporate the pop_2006 column from the lgas.csv file into your new dataset. (Hint: your id column is `lga_id`).
+   * In the end, you should have a dataset that has only the facilities in the southern zone, and one extra column. ie, You should  have a dataset with 26 rows and 11 columns.

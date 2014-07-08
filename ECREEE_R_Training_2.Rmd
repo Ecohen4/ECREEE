@@ -1,0 +1,328 @@
+---
+title: "Engineering Analysis with R"
+author: "Elliot Cohen"
+date: "July 2, 2014"
+output: html_document
+---
+<link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>
+
+```{r initialize, include=FALSE}
+setwd("~/github/Nigeria_R_Training")
+
+library(knitr)
+library(xlsx)
+library(plyr)
+library(ggplot2)
+library(scales)
+library(gdata)
+library(chron)
+library(reshape2)
+library(grid)
+library(hydroTSM)
+
+source("multiplot.R")
+source("skew.r")
+```
+
+```{r global-options, include=FALSE}
+opts_chunk$set(fig.path="figs/", fig.align="left", fig.width=8, fig.height=4)
+```
+  
+****************
+Energy Load Forecasting
+----------------
+Let's suppose we wish to merge daily temperature data with energy consumption data for the city of Delhi to analyze temperature-load correlations.  Urban energy use is driven in large part by thermal comfort (heating in the winter, cooling in the summer). Peak electricity demand in particular is highly correlated with air conditioning loads and thus outdoor air temperature.  Understanding the relationship is key to accurate load forecasts. 
+
+Of course there are additional weather-related determinants of energy demand including humidity and windspeed, as well as economic activity determinants such as a weekday vs. weekend, holiday/non-holiday, school/no-school, etc.. However, these factors are typically secondary to temperature, especially in extreme climates such as Delhi. For simplicity, let's first try to quantify the temperature-load correlation for Delhi.  We can always add complexity to our model later by including the effect of additional factors.
+
+Let's get started: 
+
+First, we need to bring in the energy consumption data and perform requisite data cleaning. Regional grid operator data was obtained for the period April 1 2012 - March 31 2013 at 30 minute timeslices.  The data includes:
+* Delhi Own Generation   
+* Schedule from Grid  
+* Drawal from Grid  
+* __Total Demand Met__   
+* Overdraw/Underdraw (OD/UD)  
+
+For now, we will focus on the demand data. We will use all of the techniques we learned in 'R Basic Training' for reading, organizing and visualizing data, and then move into engineering analysis.
+```{r import-energy-data, cache=TRUE}
+# Import data in .xls fomrat
+#library(xlsx)
+#SLDC<-read.xlsx(file="DTL-PS-2012-13.xls", sheetIndex=1, as.data.frame=TRUE, header=TRUE)
+
+# Save it as an R object
+#save(SLDC, file="SLDC.raw.rsav")
+
+# Load the R object (much faster than reading the .xlsx)
+load("SLDC.raw.rsav")
+```
+
+```{r organize-energy-data}
+# Create Time and Date attributes
+SLDC$Date<-as.Date(SLDC$Time)
+
+# Seperate Date into yr-month-day
+ymd<-strsplit(as.character(SLDC$Date),"-")
+SLDC$year<-laply(ymd, '[[', 1) #assign the list of years to an array called SLDC$year
+SLDC$month<-laply(ymd, '[[', 2)
+SLDC$day<-laply(ymd, '[[', 3)
+
+SLDC$year<-as.factor(SLDC$year)
+SLDC$month<-as.factor(SLDC$month)
+SLDC$day<-as.factor(SLDC$day)
+
+# Timestamps in the raw data are not uniformly spaced, but we wish to characterize the diurnal pattern in discrete time blocks. 
+# To do so, we must round the timestamp to the nearest hour:
+clean.time<-round(SLDC$Time, units="hours")
+
+# Format the timestamp
+SLDC$hours<-times(format(clean.time, "%H:%M:%S"))
+
+# To summarize the data for each hour, we use the `ddply` function. `ddply` does not accept Date-Time class variables, so we will need to convert the time to a character string before summarizing:
+SLDC$hours<-as.character(SLDC$hours)
+
+# Finally, we can summarize the data by hour
+hourly<-ddply(SLDC, .(Date, year, month, day, hours), numcolwise(mean))
+length(levels(as.factor(hourly$hours))) # 24 hours, check!
+
+# ...and save the final dataframe. The extension .rsav is for reading/writing data in R only.
+save(hourly, file="hourly-demand.rsav")
+
+# Next time, you can simply load the dataframe without repeating the lines above. 
+load("hourly-demand.rsav")
+```
+
+### Diurnal and Seasonal Patterns
+Given hourly demand data, we can study diurnal patterns, and importantly, how those patterns change throughout the year.  This provides insight into how and when energy is used, and thus what it is likely used for.  As a result, this information can be used for peak-load forecasting: Identify factors that drive demand (e.g. climate, weather, population, affluence and technology) and then apply projections of how those drivers are likely to change over time to predict demand.  
+
+Let's look at the characteristic diurnal load profile of each month for Delhi, India.
+```{r diurnal}
+# Summarize the data by hour, calculating the min, mean and max 'Demand.met'.
+diurnal<-ddply(hourly, .(month, hours), summarize, min=min(Demand.met), mean=mean(Demand.met), max=max(Demand.met), sd=sd(Demand.met), peak_to_mean=max(Demand.met)/mean(Demand.met), peak_to_trough=max(Demand.met)/quantile(Demand.met,0.01))
+
+# create a dummy timestamp
+Time<-as.POSIXlt(diurnal$hours,format="%H:%M:%S", tz="IST")
+
+# keep just the hour component
+Time<-format(Time, "%H")
+diurnal$hours<-Time
+
+# re-order factor levels for the month attribute to show cold months with cool colors and hot months with warm colors.
+diurnal$month = factor(diurnal$month,levels(diurnal$month)[c(6:12,1:5)])
+```
+
+```{r diurnal-plot, fig.align='left', fig.height=6, fig.width=8}
+# plot the monthwise diurnal pattern
+ggplot(diurnal, aes(x=hours, y=mean, group=month, color=month)) +
+  geom_line() +
+  scale_y_continuous(name='MW') +
+  scale_x_discrete(name="hour") +
+  labs(title="Characteristic diurnal pattern of hourly demand in each month") +
+  theme_bw()
+```
+
+### Discussion:
+- What do you think is driving the diurnal pattern in the summer months (warm colors)?
+- What do you think is driving the diurnal pattern in the winter months (cool colors)?
+- What do you notice is different about the diurnal pattern in summer vs. winter?
+- What could explain the persistant high demand even at midnight during the summer?
+
+### Peak-to-Mean Ratios
+Let's look at the peak-to-mean and peak-to-trough ratio for a characteristic day in each month.
+```{r peak-to-mean}
+ddply(diurnal, .(month), summarize, peak_to_mean=max(mean)/mean(mean), peak_to_trough=max(mean)/min(mean))
+
+daily.ptm<-ddply(SLDC, .(Date), summarize, peak_to_mean=max(Demand.met)/mean(Demand.met), peak_to_trough=max(Demand.met)/quantile(Demand.met,0.05))
+
+# ggplot(subset(daily.ptm, Date != 2012-07-30 & Date != 2012-07-30), aes(x=Date, y=peak_to_mean)) + geom_line()
+# ggplotsubset(daily.ptm, Date != "2012-07-30" & Date != "2012-07-30"), aes(x=Date, y=peak_to_trough)) + geom_line()
+```
+Similarly, let's look at the peak-to-mean and peak-to-trough ratio by month. What do you notice here?
+```{r monthly}
+# Summarize the data by month, calculating the min, mean and max 'Demand.met'.
+monthly<-ddply(SLDC, .(month), summarize, min=min(Demand.met), mean=mean(Demand.met), max=max(Demand.met), sd=sd(Demand.met), peak_to_mean=max(Demand.met)/mean(Demand.met), peak_to_trough=max(Demand.met)/quantile(Demand.met,0.01))
+monthly
+```
+Note: zero values may exist in the Demand.met data (e.g. due to temperorary loss-of-load), in which case the peak-to-trough ratio would go to infinity. As a quick fix, take the 1st percentile (instead of zeroeth) as the "trough".  This effectively removes outliers at the bottom tail of the distribution.
+
+### Discussion:
+- Which months are more peaky?
+- How can you tell?
+- Which months 
+- What do you think is driving the diurnal pattern in the winter months (cool colors)?
+
+To further aggregate the data from hourly to daily, use this:
+```{r aggregation}
+daily.load<-ddply(SLDC, .(Date), numcolwise(mean))
+```
+
+### Temperature-Load Correlations
+```{r temperature, cache=TRUE}
+# Import daily mean temperature data for Delhi, India 1995-2013.
+daily.temp<-read.table(file="Daily_Temperature_1995-2013_Delhi.txt", header=FALSE, colClasses=c("factor", "factor","factor","numeric"))
+
+# Assign column names
+names(daily.temp)<-c("Month","Day","Year","Temp")
+
+# Create Date attribute (column)
+daily.temp$Date<-as.Date(as.character(paste(daily.temp$Year, daily.temp$Month, daily.temp$Day,sep="-")), "%Y-%m-%d")
+
+# grab daily.temp for period 2012-04-01 to 2013-03-31
+daily.temp<-subset(daily.temp, Date > as.Date("2012-03-31") & Date < as.Date("2013-04-01"))
+```
+
+```{r vizualization, fig.width=12, fig.height=8}
+# Plot the daily-average demand met for Delhi
+load.p<-ggplot(daily.load, aes(x=Date, y=Demand.met)) + 
+  geom_line(colour="blue") + 
+  scale_y_continuous(name='Mean Load (MW)') +
+  scale_x_date(breaks=date_breaks("2 months"), labels=date_format("%b-%Y")) +
+  labs(title="Load Profile of Delhi, India ")
+
+# Now plot the daily-average temperature for Delhi that we've been working with....
+temp.p<-ggplot(daily.temp, aes(x=Date, y=Temp)) +
+  geom_line(colour="red") +
+  scale_y_continuous(name='Temperature (deg.F)', limits=c(round(32,digits=-1),round(1.1*max(daily.temp$Temp),digits=-1)), expand=c(0,0)) +
+  scale_x_date(breaks=date_breaks("2 months"), labels=date_format("%b-%Y")) +
+  labs(title="Temperature Profile of Delhi,  India")
+
+# plot the two side-by-side
+multiplot(load.p, temp.p, cols=1)
+```
+
+Now that we have coressponding temperature and load data for one year, we can build a simple linear regression model to test the effect of temperature on load. To fit an ordinary least-squares model, we can use the `lm` function (short for linear model).  
+Use ```?lm``` for details.
+```{r temp-load-cor}
+df<-merge(daily.load, daily.temp, by="Date")
+mod<-lm(Demand.met ~ Temp, data=df)
+```
+
+Imperative to any statistical model are **model diagnostics**, which verify if the data and the proposed model satisfy certain key assumptions. Before we can explain those assumptions, we must first explain how a least-squares regression works.  Linear models take the form:
+
+
+We also check the goodness of fit (e.g. how well does the model explain the data?).  Of course there are entire textbooks on regression models (and we suggest consulting one), but here we will offer the basics.
+
+After fitting a linear model, it is imperative to check the assumptions of the residuals: **normality**, **heteroscadasticity** and **independence**. We also check for undue influence of outliers (e.g. Cook’s Distance) and autocorrelation. Below, we show a suite of model diagnostics designed to allow visual inspection of these assumptions. 
+
+The residuals pass inspection: Normally distributed residuals (Q-Q plot), No significant heteroscadasticity (residuals vs. covariate scatterplots are largely random), mild autocorrelation (up to lag-3 and some cyclical behavior at higher lags, although below a standard critical threshold), and no undue influence of outliers (all Cook’s distance << 10
+
+### Cumulative Duration Curves
+```{r load-duration-curve, results='hide'}
+invisible(
+  fdc(SLDC[,5], lQ.thr=0.7, hQ.thr=0.2, plot=TRUE, log="y", cex.axis=0.9, main="Load Duration Curve", ylab="Load [MW at 30 minute dt]", xlab="% of Time Equaled or Exceeded", thr.shw=FALSE, ylim=quantile(SLDC$Demand.met, probs=c(0.01,1)), verbose=FALSE)
+  )
+
+invisible(
+  fdc(daily.temp$Temp, lQ.thr=0.7, hQ.thr=0.2, plot=TRUE, log="y", cex.axis=0.9, main="Temperature Duration Curve", ylab="Temperature [Daily Average deg. F]", xlab="% of Time Equaled or Exceeded", thr.shw=FALSE, ylim=quantile(daily.temp$Temp, probs=c(0.01,1)), verbose=FALSE)
+  )
+```
+  
+  
+*******************
+Hydrology Frequency Analysis
+--------------------
+
+Let's start by importing the data and selecting the subset of information we want, in this case, monthly mean streamflow for a river in the United States.
+```{r import-flow-data, cache=TRUE}
+# set working directory
+setwd("~/github/Nigeria_R_Training")
+options(stringsAsFactors=FALSE)
+
+# Download flow data from USGS
+SouthPlatte<-read.table("SouthPlatte_64thAve_CommerceCity_MONTHLY_MEAN_Discharge.txt",  header=TRUE) #Montly mean discharge from 1983-2010
+SouthPlatte<-SouthPlatte[-1,] # remove the first row (junk)
+flow<-as.numeric(SouthPlatte[,7]) # monthly mean discharge (CFS) in column 7
+flow1<-flow[9:344]  # water year is from Oct.1-Sept.30. get full water year data from 1983-2010.
+```
+
+Now we can organize the data:
+```{r organize-flow-data}
+# Create matrix with col names (month) and row names (year) 
+flow2=matrix(flow1, ncol=12, byrow=T, dimnames = list(c(1983:2010),c("Oct","Nov","Dec","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep"))) 
+```
+
+... and see what it looks like:
+```{r timeseries-plot1}
+# data structure
+str(flow2)
+
+# timeseries plot
+ts<-melt(flow2)
+names(ts)<-c("Year","Month","CFS")
+ts$Date<-as.Date(paste(ts$Year, ts$Month, 15, sep="-"), format="%Y-%b-%d")
+ggplot(ts, aes(x=Date, y=CFS)) + geom_line() + theme_classic()
+```
+
+Summarize the data by year and select the annual maxima flow:
+```{r ddply}
+peak.flow<-ddply(ts, .(Year), summarize, CFS=max(CFS))
+```
+
+Plot the annual maxima peak flows and log-transform of the peak flows:
+```{r timeseries-plot2, results='hold'}
+# Plot the timeseries of pleak flows vs. water year.
+plot(x=peak.flow$Year,
+     y=peak.flow$CFS, 
+     ylab="Annual Maxima flow [CFS]", 
+     main="Timeseries of Annual Maxima Flow \n South Platte River at Commerce City, CO",
+     type="l")
+
+# Plot the timeseries of log(base10) pleak flows vs. water year
+peak.flow$log.peak<-log(peak.flow$CFS)
+plot(x=peak.flow$Year,
+     y=peak.flow$log.peak, 
+     ylab="Log of Annual Maxima flow", 
+     main="Timeseries of Annual Maxima Flow \n South Platte River at Commerce City, CO",
+     type="l")
+``` 
+**Interpretation**: The shape of the timeseries plots suggests that the annual maxima are decreasing over time, but this cannot be proven from visual inspection alone.  Analysis of the change in the n-year moving average (or other types of timeseries analysis) would be helpful in quantifying non-stationarity.  Possible causes of decreased annual maxima flow on the South Platte include: (a) decreased spring snowmelt resultant from decreased winter snowpack accumulation; (b) decreased seasonal rainfall due to increased regional aridity; (c) changes in the management of upstream water infrastructure including reservoirs (there are three reservoirs upstream of this gage station on the South Platte).
+
+
+Plot the relative-frequency histogram for the flows and log(flows).  Discuss any difference in skewness evident from the two plots.     
+```{r histogram, results='hold'}
+# Frequency histogram of the flows
+hist(peak.flow$CFS, main="Histogram of Annual Peak Flows: 1984-2010 ", xlab="Cubic Feet per Second (CFS)", ylab="Frequency")
+rug(peak.flow$CFS, side=1)
+
+hist(peak.flow$log.peak, main="Histogram of Annual Log-Peak Flows: 1984-2010 ", xlab="log(CFS)", ylab="Frequency")
+rug(peak.flow$log.peak, side=1)
+```
+**Interpretation**: The histogram of the log(flows) has much less skew than than the standard histogram.  The standard histogram is strongly negatively skewed, with much of the data contained in the first bin (0-500 cfs).  By contrast, the log(flow) histogram puts most of the data near the center of the distribution, with a second mode at the high end of the distribution.  Thus, a strong shift from the lower tail to the center and upper tail of the distribution is achieved via log-transfomration of the flow data. 
+
+As another way to characterize our timeseries data, let's create a flow duration curve.  Flow duration curves, like load duration curves, organize the data in descending order and show the fraction of instances where the ordinate (y-axis) is below a certain threshold.  Duration curves describe the "peakyness" of a phenomena (e.g. flowrate or load). Data with no peaks that is always constant would produce a flat-line duration curve. "Peaky"" data will have steep gradients at the upper and lower tail.
+```{r flow-duration-curve}
+# Flow duration curve
+par(mfrow=c(1,1))
+invisible(
+  fdc(ts$CFS)
+  )
+```
+
+### Summary Statistics
+Finally, We can write a funciton to compute summary statistics from the data:
+* count  
+* mean  
+* maxima  
+* minima  
+* variance  
+* standard deviation
+* skew  
+
+```{r summary-stats}
+stats<-function(data){
+  list(
+    count=length(data),
+    mean=mean(data),
+    max=max(data),
+    min=min(data),
+    var=var(data),
+    sd=sd(data),
+    skew=skew(data)
+    )
+}
+```
+
+And now we can apply the function by passing in any dataset.
+```{r show-stats}
+stats(peak.flow$CFS)
+```
