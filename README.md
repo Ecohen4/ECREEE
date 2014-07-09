@@ -11,15 +11,18 @@ Assuming that you are now setup with git, github, and have navigated to the proj
 2. ALTERNATIVELY... skip all that and simply download the tutorials as a ZIP file. 
 Go to the following website <https://github.com/Ecohen4/ECREEE> and click "Download ZIP" on the bottom-right of the page.  This avoids getting setup with github altogether and is just like downloading data from anywhere on the web.
 
-After following option 1 *or* 2 from above, you can now load the tutorials in RStudio:
-Open RStudio, create a "New Project", select "Existing Directory" and navigate (e.g. "browse") to the github repository *or* ZIP file that you just created on your machine. 
+After following option 1 **or** 2 from above, you can now load the tutorials in RStudio:
+* Open RStudio
+* Create a "New Project"  
+* Select "Existing Directory"  
+* Navigate (e.g. "browse") to the github repository **or** ZIP file that you just created on your machine. 
 
-RStudio > File > New Project > Existing Directory > Browse > "~/MyDocuments/ECREEE".
+ [ RStudio > File > New Project > Existing Directory > Browse > ~/ECREEE ]
 
-From the "Files" pane on the bottom right of the RStudio interface, select from the following tutorials:
-* ECREEE_R_Training_1.Rmd
-* ECREEE_R_Training_2.RMD
-* 
+Then, from the "Files" pane on the bottom right of the RStudio interface, select from the following tutorials:
+* ECREEE_R_Training_1.Rmd  
+* ECREEE_R_Training_2.Rmd
+* NRLDC-Daily.Rmd
 
 
 
