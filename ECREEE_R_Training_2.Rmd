@@ -29,7 +29,7 @@ source("skew.r")
 
 ```{r global-options, include=FALSE}
 opts_chunk$set(fig.path="figs/", fig.align="left")
-options(width=75)
+options(width=80)
 ```
   
 ****************
@@ -158,7 +158,7 @@ ggplot(diurnal, aes(x=hours, y=peak_to_trough, group=month, colour=month)) +
 ```
 
 ...and as a timeseries for one year:
-```{r time-series, fig.height=7, fig.width=10}
+```{r time-series, fig.height=8}
 # summarize the data by Date
 daily.ptm<-ddply(SLDC, .(Date), summarize, 
   peak_to_mean=max(Demand.met)/mean(Demand.met), 
@@ -333,8 +333,12 @@ Finally, we can add the least-square regression line (e.g. model fit) to the obs
 plot(x=cooling$Temp, y=cooling$Demand.met, xlab="Temperature (deg. F)", ylab="Load (MW)")
 abline(mod)
 ```
+Alas, we can use the regression model to predict daily peak load given a daily mean temperature. This is the first step in creating an accurate load-forecast!
 
-### Cumulative Duration Curves
+*************
+Cumulative Duration Curves
+-------------
+Duration curves describe the "peakyness" of a phenomena (e.g. flowrate or load). Data with no peaks and is always constant would produce a flat-line duration curve. "Peaky"" data will have steep gradients at the upper and lower tail. Duration curves are constructed by organizing the data in descending order and showing the fraction of instances where the ordinate (y-axis) is below a certain threshold.
 ```{r load-duration-curve, results='hide'}
 invisible(
   fdc(SLDC[,5], lQ.thr=0.7, hQ.thr=0.2, plot=TRUE, log="y", cex.axis=0.9, main="Load Duration Curve", ylab="Load [MW at 30 minute dt]", xlab="% of Time Equaled or Exceeded", thr.shw=FALSE, ylim=quantile(SLDC$Demand.met, probs=c(0.01,1)), verbose=FALSE)
