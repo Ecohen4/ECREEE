@@ -9,7 +9,6 @@ output:
 <link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>
 
 ```{r initialize, include=FALSE}
-setwd("~/github/Nigeria_R_Training")
 
 library(knitr)
 library(xlsx)

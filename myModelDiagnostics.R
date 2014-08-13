@@ -11,29 +11,29 @@ GLMdiagnostics<- function(bestmodel){
   ncoefs<-length(bestmodel$coefficients)
   Y<-bestmodel$model[,1]
 
-  if(bestmodel$call[1]=="glm()"){
-    if(ncoefs>2){
+  #if(bestmodel$call[1]=="glm()"){
+  if(ncoefs>2){
 
-      # if predictors specified indvidualy in df notation (Y ~ X1 + X2 + X3, data=df)
-      k<-dim(bestmodel$model)[2]-1 # k predictors
-      p=k+1                        # p parameters
-      X<-bestmodel$model[,2:p]     # predictors used to fit the model
+    # if predictors specified indvidualy in df notation (Y ~ X1 + X2 + X3, data=df)
+    k<-dim(bestmodel$model)[2]-1 # k predictors
+    p=k+1                        # p parameters
+    X<-bestmodel$model[,2:p]     # predictors used to fit the model
 
-#       # if model fitted with matrix notation... (Y ~ X, where Y is the response vector and X a predictor matrix)
-#       p<-length(bestmodel$coefficients) # p model parameters
-#       k=p-1                             # k independent variables
-#       X<-bestmodel$model[,2]            # predictors used to fit the model
-#       X<-as.data.frame(X)
+    #       # if model fitted with matrix notation... (Y ~ X, where Y is the response vector and X a predictor matrix)
+    #       p<-length(bestmodel$coefficients) # p model parameters
+    #       k=p-1                             # k independent variables
+    #       X<-bestmodel$model[,2]            # predictors used to fit the model
+    #       X<-as.data.frame(X)
 
-    }
-    if(ncoefs==2){
-      X<-bestmodel$model[,2]       # predictors used to fit the model
-      X<-as.data.frame(X)
-      names(X)<-names(bestmodel$coefficients)[2]
-      k=1                          # k predictors
-      p=k+1                        # p parameters
-    }
   }
+  if(ncoefs==2){
+    X<-bestmodel$model[,2]       # predictors used to fit the model
+    X<-as.data.frame(X)
+    names(X)<-names(bestmodel$coefficients)[2]
+    k=1                          # k predictors
+    p=k+1                        # p parameters
+  }
+  #}
   n=length(Y)
   N=length(Y)
   # Yhat from the model$fitted.values
@@ -41,7 +41,10 @@ GLMdiagnostics<- function(bestmodel){
 
   # Yhat from model prediction
   Ypred<-predict(bestmodel, newdata=X, type="response")
-  Ypred.link<-predict(bestmodel, newdata=X, type="link")
+
+  if(bestmodel$call[1]=="glm()"){
+    Ypred.link<-predict(bestmodel, newdata=X, type="link")
+  }
 
   # Yhat from theory (apply to guassian only??)
   Xm<-as.matrix(X)
@@ -49,35 +52,39 @@ GLMdiagnostics<- function(bestmodel){
   Xaug<-cbind(1,Xm)  #augmented matrix
   Yhat<-Xaug %*% solve(t(Xaug) %*% Xaug) %*% t(Xaug) %*% Y
 
-  # How similar are Yhat from theory and model fitted.values?
-  print(paste("Are model$fitted.values and Yhat from theory identical?", identical(Yfit,Yhat), sep=" "))
-
-  PctDif = (Yfit-Ypred)/Ypred
-  print(paste("Are model$fitted.values and Yhat from theory within 5% of each other?", all(PctDif<0.05), sep=" "))
-
-  # show comparison between Yhat computations
-  Ycalcs<-data.frame(Yfit=Yfit, Yhat.Theory=Yhat, Ypred=Ypred)
-  print(head(Ycalcs))
-
-  # plot histograms of the various Y estimations
-  par(mfrow=c(2,2))
-  par(oma=c(0,0,0,0))      #set outter margins
-  par(mar=c(4,4,2,2)+0.1)  #set plot margins
-  hist(Y)      # obserbed Y
-  hist(Yhat)   # X %*% solve(t(X) %*% X) %*% t(X) %*% Y
-  hist(Ypred)  # predict.glm(model, newdata=X, response=TRUE)
-  hist(Yfit)   # bestmodel$fitted.values
+##### commented out for presentations #####
+#   # How similar are Yhat from theory and model fitted.values?
+#   print(paste("Are model$fitted.values and Yhat from theory identical?", identical(Yfit,Yhat), sep=" "))
+#
+#   PctDif = (Yfit-Ypred)/Ypred
+#   print(paste("Are model$fitted.values and Yhat from theory within 5% of each other?", all(PctDif<0.05), sep=" "))
+#
+#   # show comparison between Yhat computations
+#   Ycalcs<-data.frame(Yfit=Yfit, Yhat.Theory=Yhat, Ypred=Ypred)
+#   print(head(Ycalcs))
+#
+#   # plot histograms of the various Y estimations
+#   par(mfrow=c(2,2))
+#   par(oma=c(0,0,0,0))      #set outter margins
+#   par(mar=c(4,4,2,2)+0.1)  #set plot margins
+#   hist(Y)      # obserbed Y
+#   hist(Yhat)   # X %*% solve(t(X) %*% X) %*% t(X) %*% Y
+#   hist(Ypred)  # predict.glm(model, newdata=X, response=TRUE)
+#   hist(Yfit)   # bestmodel$fitted.values
+##### commented out for presentations #####
 
   # Now get residuals of the model..
   modresid<-bestmodel$residuals
 
-  # alternate residuals computation...
-  resid.pred = Y-Ypred  # Y - predict(model, X, response=TRUE)
-  resid.fit = Y-Yfit    # Y - bestmodel$fitted.values
-
-  resids<-cbind(bestmodel$residuals, residuals(bestmodel), Y-bestmodel$fitted.values, Y-predict(bestmodel, newdata=X, response=TRUE))
-  colnames(resids)<-c("bestmodel$residuals","residuals(bestmodel)","Y-Yfit","Y-Ypred")
-  print(head(resids))
+##### commented out for presentations #####
+#   # alternate residuals computation...
+#   resid.pred = Y-Ypred  # Y - predict(model, X, response=TRUE)
+#   resid.fit = Y-Yfit    # Y - bestmodel$fitted.values
+#
+#   resids<-cbind(bestmodel$residuals, residuals(bestmodel), Y-bestmodel$fitted.values, Y-predict(bestmodel, newdata=X, response=TRUE))
+#   colnames(resids)<-c("bestmodel$residuals","residuals(bestmodel)","Y-Yfit","Y-Ypred")
+#   print(head(resids))
+##### commented out for presentations #####
 
   # Compute ANOVA quantities for use down below
   #SST = Total corrected sum of squares, n-1 dof
@@ -333,20 +340,20 @@ droptest<-function(drop, bestmodel){
   ncoefs<-length(bestmodel$coefficients)
   Y<-bestmodel$model[,1]
 
-  if(bestmodel$call[1]=="glm()"){
-    if(ncoefs>2){
-      k<-dim(bestmodel$model)[2]-1 # k predictors
-      p=k+1                        # p parameters
-      X<-bestmodel$model[,2:p]
-    }
-    if(ncoefs==2){
-      X<-bestmodel$model[,2]
-      X<-as.data.frame(X)
-      names(X)<-names(bestmodel$coefficients)[2]
-      k=1        # k predictors
-      p=k+1      # p parameters
-    }
+  #if(bestmodel$call[1]=="glm()"){
+  if(ncoefs>2){
+    k<-dim(bestmodel$model)[2]-1 # k predictors
+    p=k+1                        # p parameters
+    X<-bestmodel$model[,2:p]
   }
+  if(ncoefs==2){
+    X<-bestmodel$model[,2]
+    X<-as.data.frame(X)
+    names(X)<-names(bestmodel$coefficients)[2]
+    k=1        # k predictors
+    p=k+1      # p parameters
+  }
+  #}
   n=length(Y)
   N=length(Y)
 
@@ -556,8 +563,8 @@ HGLM.skill<-function(pctdrop, mod1, mod2, mod3){
   X<-cbind(X1,X2,X3)
 
   # backtransform Yhat
-#   Yhat<-exp(mod1$fitted.values + mod2$fitted.values + mod3$fitted.values)
-#   Y<-RNS
+  #   Yhat<-exp(mod1$fitted.values + mod2$fitted.values + mod3$fitted.values)
+  #   Y<-RNS
   Y<-mod1$model[,1]
   n=length(Y)
   N=length(Y)
