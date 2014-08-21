@@ -8,13 +8,13 @@ output:
 <link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>
 
 *************
-```{r global_options, include=FALSE}
+```{r global_options, results='hide'}
 library(knitr)
 opts_chunk$set(fig.path='Figs/', echo=FALSE, fig.width=14, fig.height=8)
 options(width=85)
 ```
 
-```{r initialize, message=FALSE}
+```{r initialize, results='hide', message=FALSE}
 ## Set working directory
 setwd("/Users/elliotcohen/Dropbox/data/Electricity/CEA/Rcommands")
 

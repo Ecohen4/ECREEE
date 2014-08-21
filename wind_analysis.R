@@ -16,7 +16,6 @@ library(ggplot2)
 library(reshape2)
 
 # import raw data
-# dat<-read.csv(file="WINDFARM_VXE_2013.csv", header=TRUE)
 dat<-read.csv(file="WIND_VXE_2013.csv", header=TRUE)
 
 # preview the data and data structure
@@ -80,24 +79,26 @@ dat$energy_sentout_10min_kwh<-c(diff,0)
 # check if we introduced any NA's
 sum(is.na(dat$energy_sentout_10min_kwh))
 
+####### DATA FILTER ##############
 # check for outliers in wind data
 summary(dat$mean_wind_mps)
-hist(dat$mean_wind_mps)  # looks good
+hist(dat$mean_wind_mps)
+# looks good
 
 # check for outliers in energy data
 summary(dat$energy_sentout_10min_kwh)
-hist(dat$energy_sentout_10min_kwh) # looks funny...
+hist(dat$energy_sentout_10min_kwh)
+# looks funny...
 
-# remove erroneous values:
 # remove negative energy values (impossible)
-dat<-subset(dat, dat$energy_sentout_10min_kwh > 0)
+dat<-subset(dat, dat$energy_sentout_10min_kwh >= 0)
 
-# remove values beyond what's possible given installed capacity
+# remove energy values beyond what's possible given installed capacity
 cap<-850*7 #KW
 cap_10min_kwh<-cap*(10/60) #KWh
-dat<-subset(dat, dat$energy_sentout_10min_kwh < cap_10min_kwh)
+dat<-subset(dat, dat$energy_sentout_10min_kwh <= cap_10min_kwh)
 
-# # remove outliers: retain 1st to 99th percentiles
+# # alternatively, we can remove statistical outliers: retain 1st to 99th percentiles
 # range<-quantile(dat$energy_sentout_10min_kwh, probs=c(0.01,0.99))
 # dat<-subset(dat, dat$energy_sentout_10min_kwh > range[1])
 # dat<-subset(dat, dat$energy_sentout_10min_kwh < range[2])
@@ -109,16 +110,63 @@ hist(dat$energy_sentout_10min_kwh)
 # plot wind speed vs power output
 plot(dat$mean_wind_mps, dat$energy_sentout_10min_kwh)
 
-# windspeed vs power output looks okay, but there are erroneous wind speed values...
-# how could so much power be produced at such low wind speeds?  Assume erroneous.
-# subset data to windspeed cut-in/cut-out set points
-# dat<-subset(dat, dat$mean_wind_mps > 0) # TEST
+# windspeed vs power output looks okay, but how could so much power be produced at such low wind speeds?
 
+# # choose one of the following windspeed filters:
+
+# # OPTION 1: when windspeed < 3 mps, or above 25 mps, turbine shuts off --> set power output to zero.
+# # OPTION 1 is preferable for computing capacity factor, but makes fitting a Weibull distribution more difficult because a large number of observations are forced to a windspeed of zero, creating a large first bin.
+# test<-which(dat$mean_wind_mps < 3 | dat$mean_wind_mps > 25)
+# dat$energy_sentout_10min_kwh[test]<-0
+
+# # OPTION 2: subset data to windspeed cut-in/cut-out set points (e.g. remove records outisde setpoints)
+# # Option 2 is preferable for fitting the Weibull distrubtion, but skews the capacity factor uprwards.
 dat<-subset(dat, dat$min_wind_mps > 3)
 dat<-subset(dat, dat$max_wind_mps < 25)
 
+summary(dat$energy_sentout_10min_kwh)
+hist(dat$energy_sentout_10min_kwh)
+
 # plot the data again... Looks much better now.
 plot(dat$mean_wind_mps, dat$energy_sentout_10min_kwh)
+
+# Estimate the power curve. To do so, we find the maximum power output at each windspeed. Since we have continuous data, we need to bin the data into discrete segments first.
+# choose bin range based on range of the data, and bin size based on the number of observations available.  Since we have lots of data, we can use small bins.
+range<-range(dat$mean_wind_mps)
+bins<-seq(range[1], range[2], by=0.2)
+
+# summarize the data by wind bin
+# NOTE: the ddply function doesn't work with POSIX objects... because POSIX objects are really lists...
+# use factor or character string representations of date_time when summarizing with ddply()
+dat$date_time<-as.character(dat$date_time)
+dat$wind.bin<-cut(x=dat$mean_wind_mps, breaks=bins)
+ddply(dat, .(wind.bin), function(x) quantile(x$energy_sentout_10min_kwh))
+# power.curve<-ddply(dat, .(wind.bin), summarize, max.kwh=max(energy_sentout_10min_kwh), max.kw=max(energy_sentout_10min_kwh)*6)
+
+# choose the 75th percentile
+power.curve<-ddply(dat, .(wind.bin), summarize, power.curve=quantile(energy_sentout_10min_kwh, probs=0.75))
+
+# Now we can re-assign the power output for all observations in a given bin to the max energy ouput observed for that bin.
+# This yields the *theoretical* energy output assuming all energy can be accepted by the grid.
+# let's choose the 75th percentile energy sentout at a given windspeed to define the power curve.
+dat<-merge(dat, power.curve, by="wind.bin")
+plot(x=dat$mean_wind_mps, y=dat$power.curve)
+
+# compute turbine efficiency
+dat$eff<-dat$power.curve/(c*(dat$mean_wind_mps)^3)
+
+# compute kinetic energy in the wind at each windspeed
+rho=1.225 # density of wind (kg/m^3)
+area=2174 # sweep area of wind turbines (m^2)
+turbines=7 # number of turbines
+dat$KE<-0.5*rho*area*(dat$mean_wind_mps)^3*turbines/(1000*6) # KWh in 10 min
+
+energy<-melt(subset(dat, select=c("mean_wind_mps", "energy_sentout_10min_kwh", "power.curve", "KE")), id.vars=(mean_wind_mps))
+ggplot(dat, aes(x=mean_wind_mps,y=values, group=variable, colour=variable ))
+plot(x=dat$mean_wind_mps, y=dat$eff, xlim=c(0,max(dat$mean_wind_mps)))
+
+# save the "clean" windspeed data
+write.csv(dat, file="clean_VXE_wind_speed.csv")
 
 # Now that we have 'cleaned' the data, we can estimate the distributional properties of the wind resource and estimate the power curve.
 # fit a distribution to the wind data
@@ -129,26 +177,6 @@ descdist(dat$mean_wind_mps) # heuristic
 weibull.fit<-fitdist(dat$mean_wind_mps, distr="weibull")
 summary(weibull.fit)
 plot(weibull.fit, demp=TRUE)
-
-# Estimate the power curve. To do so, we find the maximum power output at each windspeed. Since we have continuous data, we need to bin the data into discrete segments first.
-# choose bin range based on range of the data, and bin size based on the number of observations available.  Since we have lots of data, we can use small bins.
-range(dat$mean_wind_mps)
-bins<-seq(3, 20, by=0.2)
-
-# summarize the data by wind bin
-# NOTE: the ddply function doesn't work with POSIX objects... because POSIX objects are really lists...
-# use factor or character string representations of date_time when summarizing with ddply()
-dat$date_time<-as.character(dat$date_time)
-dat$wind.bin<-cut(x=dat$mean_wind_mps, breaks=bins)
-power.curve<-ddply(dat, .(wind.bin), summarize, max.kwh=max(energy_sentout_10min_kwh), max.kw=max(energy_sentout_10min_kwh)*6)
-#ddply(dat, .(wind.bin), function(x) quantile(x$energy_sentout_10min_kwh))
-
-
-# Now we can re-assign the power output for all observations in a given bin to the max energy ouput observed for that bin.
-# This yields the *theoretical* energy output assuming all energy can be accepted by the grid.
-# let's choose the 99 percentile (near max) power output at a given windspeed to define the power curve.
-dat<-merge(dat, power.curve, by="wind.bin")
-plot(x=dat$mean_wind_mps, y=dat$max.kw)
 
 # finally, let's aggregate the data and compute HOURLY energy output and number of hours in the dataset.
 # to do so, we must convert date_time into a POSIXlt or POSIXct date-time class.
@@ -167,11 +195,17 @@ sum(is.na(as.POSIXlt(dat$date_time, format="%m/%d/%y %H:%M"))) # zero NAs
 dat$date_time<-as.POSIXlt(dat$date_time, format="%m/%d/%y %H:%M")
 dat$hour <- cut(dat$date_time, breaks = "hour")
 
+actual.cf.under<-sum(dat$energy_sentout_10min_kwh)/(850*7*8760)
+actual.cf.over<-sum(dat$energy_sentout_10min_kwh)/(850*7*dim(dat)[1]/6)
+best.cf<-sum(dat$max.kwh)/(850*7*dim(dat)[1]/6)
+data.frame(actual.cf.under=actual.cf.under, actual.cf.over=actual.cf.over, best.cf=best.cf)
+
 # convert moditifed date_time POSIX back to charcater for compatability with ddply()
 dat$date_time<-as.character(dat$date_time)
 
 # aggregate from 10-min to hourly
 hourly <- ddply(dat, .(hour), summarize,
+                hours=sum(mins)/60,
                 mean_wind_mps=mean(mean_wind_mps),
                 actual_energy_sentout_kwh=sum(energy_sentout_10min_kwh),
                 possible_energy_sentout_kwh=sum(max.kwh),
