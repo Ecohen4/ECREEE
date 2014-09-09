@@ -1,13 +1,14 @@
 ---
 title: "Wind Analysis"
 author: "Sustainable Engineering Lab, Columbia University (by Elliot Cohen)"
-date: "August 14, 2014"
+date: August 22 2014
 output:
   html_document:
     fig_height: 4
     theme: readable
     toc: yes
 ---
+<link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>
 
 Use this R script to analyze wind speed and wind power data:  
 * import raw data from .csv  
@@ -37,20 +38,18 @@ library(reshape2)
 library(fitdistrplus)
 
 # set global options for html output
-opts_chunk$set(fig.path="figs/", echo=TRUE, cache=TRUE, fig.align="left")
+opts_chunk$set(fig.path="figs/", echo=TRUE, cache=FALSE, fig.align="left")
 
 # avoid using factors until you become more familiar with object classes
 options(stringsAsFactors=FALSE)
 ```
 
-### Import and preview raw data
-```{r read.data, cache=TRUE, results='hide'}
+### Import data from .csv
+```{r read.data, cache=TRUE}
 data<-read.csv(file="WIND_VXE_2013.csv", header=TRUE)
-dim(data)
-str(data)
 ```
 
-Assign succint, descriptive column names
+### Assign succint, descriptive column names
 ```{r column.names, results='hide'}
 # assign new column names to be more succint (avoid spaces, use _ or . to seperate words)
 new.names<-c("date_time","T1_Possible_Power","T2_Possible_Power","T3_Possible_Power","T4_Possible_Power","T5_Possible_Power","T6_Possible_Power","T7_Possible_Power","T1_Total_Active_Power","T2_Total_Active_Power","T3_Total_Active_Power","T4_Total_Active_Power","T5_Total_Active_Power","T6_Total_Active_Power","T7_Total_Active_Power","mean_wind_mps", "min_wind_mps", "max_wind_mps", "cum_energy_delivered_kwh")
@@ -62,7 +61,8 @@ cbind(names(data), new.names)
 names(data)<-new.names
 ```
 
-Subset data by type. For most of this analysis, we only need cumulative energy delivered and windspeed. We can compute the rest from first principles. Create a new `data.frame` called `dat` that contains just the information we want:
+### Subset data by type 
+For most of this analysis, we only need cumulative energy delivered and windspeed. We can compute the rest from first principles. Create a new `data.frame` called `dat` that contains just the information we want:
 ```{r choose.data, results='hide'}
 # subset data by type
 Cumulative<-subset(data, select=c(1,19))
@@ -72,13 +72,19 @@ Wind<-subset(data, select=c(1,16:18))
 
 # select data to use
 dat<-data # keep all the data
-#dat<-merge(Possible, Cumulative, Wind) # keep all but Active Power
-#dat<-subset(data, select=c("date_time", "mean_wind_mps", "min_wind_mps", "max_wind_mps", "cum_energy_delivered_kwh", )) # keep only windspeed and cumulative energy
+
+# similarly, you could select all the data besides Active Power 
+# dat<-merge(Possible, Cumulative, Wind) # keep all but Active Power
 ```
 
-Use the `summary` function for a statistical summary of the data contained in each column of the `data.frame` `dat`.
-```{r summary}
-summary(dat) # besides NAs, stats look OK at first glance
+### Preview the raw data
+`dim` returns the dimensions of the data (rows x columns).  
+`str` returns the structure of the data (class)
+`summary` returns a statistical summary (quantiles) of the data contained in each column of the `data.frame` named "dat".
+```
+dim(dat)
+str(dat)
+summary(dat)
 ```
 
 ### Check for missing values
@@ -304,8 +310,9 @@ removed(nrow2, nrow3)
 summary(dat$energy_sentout_10min_kwh)
 hist(dat$energy_sentout_10min_kwh)
 ```
-Now the summary statistics look more reasonable. Let's see what the data looks like now with respect to time.
+Now the summary statistics look more reasonable.   
 
+Let's see what the data looks like now with respect to time.
 ```{r filtered.energy.timeseries, fig.width=9, fig.height=5}
 # Total energy, per week
 energy<-subset(dat, select=c("week", "energy_sentout_10min_kwh", "uncurtailed_10min_kwh", "curtailment_10min_kwh", "betz_limit_10min_kwh"))
@@ -337,7 +344,7 @@ hist(dat$max_wind_mps, main="Histogram of Max Windspeeds")
 
 dat<-subset(dat, mean_wind_mps > 0.5)
 ```
-Wind data looks OK besides the first bin. First bin is far too large. So we remove these values.
+Wind data looks OK besides the first bin. First bin is far too large. So we removed records (rows) associated with windspeeds less than 0.5 mps (first bin).
 
 Check wind measurements with respect to time:
 ```{r wind.timeseries, fig.width=9, fig.height=5}
@@ -356,8 +363,9 @@ ggplot(test, aes(x=week, y=value, group=variable, colour=variable, linetype=vari
 
 Now let's check if the windspeed and energy measurements make sense together (e.g. pairwise observations).  
 Recall this is timeseries data, so at every timestamp there is a windspeed and energy measurement.
-Plot the power curve, with benchmarks:
-```{r benchmark.plot, fig.width=9, fig.height=5}
+
+### Plot the power curve with benchmark comparisons
+```{r benchmark.plot, fig.width=9, fig.height=5, warning=FALSE}
 energy<-subset(dat, select=c("mean_wind_mps", "energy_sentout_10min_kwh", "wind_energy_10min_kwh", "betz_limit_10min_kwh"))
 energy<-melt(energy, id.vars=("mean_wind_mps"))
 ggplot(energy, aes(x=mean_wind_mps, y=value, group=variable, colour=variable)) + 
@@ -379,12 +387,12 @@ We know that the turbines shutdown at windspeeds below 3mps and above 25mps. We 
 * Con: Weibull distribution and capacity factor will be skewed uprwards because observations at low windspeeds have been removed.  
 
 The following code is not run, but shown as an example of how to filter the data with respect to turbine setpoints.
-```
+```{r wind.filter}
 dat<-subset(dat, dat$min_wind_mps > 3)
 dat<-subset(dat, dat$max_wind_mps < 25)
 ```
 
-```{r filtered.benchmark.plot, ref.label="benchmark.plot", eval=FALSE}
+```{r filtered.benchmark.plot, ref.label="benchmark.plot",fig.width=9, fig.height=5, warning=FALSE, eval=TRUE}
 ```
 
 Save the "clean" wind data (post-filter)
@@ -415,7 +423,7 @@ summary(weibull.fit)
 plot(weibull.fit, demp=TRUE)
 ```
 
-### Compute the capacity factor:
+### Compute the capacity factor (actual and potential)
 ```{r capacity.factor}
 # summation of energy sentout, divided by the number of hours, yields average power sentout.
 avg.power<-sum(dat$energy_sentout_10min_kwh)/(dim(dat)[1]/6)
@@ -435,7 +443,7 @@ Data Correction
 --------------------------------------------
 Above we demonstrated several ways to filter the data based on physics of the system and known system constraints. This type of data filtering is excellent for removing **random** missing, erroneous or outlier data.  However, what if we have reason to believe the wind measurements are systematicaly too low? How can we address a systematic bias in the data? One way is to apply a correction algorithim.
 
-### Windspeed Correction Algorithim
+### Windspeed correction algorithim
 Assume the energy sentout measurements are correct, and that all the error is contained in the windspeed measurements.  This may be a good assumption since the energy data can be confirmed at other points in the electricity system (e.g. at the bus bar, by the utility or dispatch center, etc...).  Now, assuming the load measurements are correct, then we can back out the minimum windspeed needed to produce that much power.  We then re-assign the calculated minimum windspeed to observations with imfeasible wind speeds measurements.  Conceptually, we are correcting inaccurate windspeed measurements by shifting them to the right (to the power curve).
 
 To demonstrate **data correction as an alternative to removing suspect data**, we start from the beginning with the raw data:
@@ -474,7 +482,7 @@ nrow2<-dim(dat)[1]
 removed(nrow, nrow2)
 ```
 
-### Fit a Weibull distribution to the statistically filtered windspeed data
+### Fit a Weibull distribution to statistically-filtered windspeed data
 ```{r fit.weibull.2, fig.width=8, fig.height=6}
 # fit a distribution to the wind speed data
 library(fitdistrplus)
@@ -486,7 +494,7 @@ summary(weibull.fit.2)
 plot(weibull.fit.2, demp=TRUE)
 ```
 
-### Plot meteorolgical windspeed vs. power output (curtailed and uncurtailed)
+### Plot windspeed vs. power generation (curtailed and uncurtailed)
 ```{r uncurtailed.power, fig.width=8, fig.height=6}
 plot(dat$mean_wind_mps, dat$uncurtailed_10min_kwh, col="red", cex=0.2, pch=20, main="Curtailed and Uncurtailed Wind Energy Production\nSao Vicente, Cape Verde (2013)", xlab="Windspeed (mps)", ylab="Energy (kWh/10min)")
 points(dat$mean_wind_mps, dat$energy_sentout_10min_kwh, col="green", cex=0.2, pch=20)
@@ -545,7 +553,7 @@ summary(fitw)
 denscomp(fitw, addlegend=FALSE, main="Histogram and Weibull Fit for Corrected Windspeeds")
 ```
 
-### Put it all together: Manufactures power curve, Uncurtailed Power Curve (with windspeed correction), Curtailed Power Curve (with windspeed correction).
+### Put it all together: manufacturer's power curve, uncurtailed power curve (with corrected windspeed) and curtailed power curve (with corrected windspeed).
 ```{r MPC.v.EPC, fig.width=8, fig.height=6}
 plot(x=MPC$windspeed_mps, y=MPC$design_sentout_10min_kwh, type="p", pch=4, main="Manufacturers Power Curve\n with Corrected Empirical Overlay", xlab="Windspeed (mps)", ylab="Energy (kWh/10min)", xlim=c(0,20))
 points(y=dat$energy_sentout_10min_kwh, x=dat$corrected_wind_mps, col="green", cex=0.1, pch=20)
@@ -602,7 +610,7 @@ points(y=dat$energy_sentout_10min_kwh, x=dat$corrected_wind_mps, col="blue", cex
 legend("bottomright", legend=c("Estimated Power Curve (w. windspeed correction)", "Manufacturer's Power Curve", "Observations (w. windspeed correction"), col=c("blue","black","blue"), pch=c(1,4,20))
 ```
 
-Compute the capacity factor
+### Re-compute capacity factor with windspeed correction
 ```{r capacity.factor.2}
 # summation of energy sentout, divided by the number of hours, yields average power sentout.
 avg.power<-sum(dat$energy_sentout_10min_kwh)/(dim(dat)[1]/6)
@@ -614,6 +622,7 @@ betz.cap.factor<-sum(dat$betz_limit_10min_kwh)/(850*7*dim(dat)[1]/6)
 data.frame(curtailed.cap.factor, uncurtailed.cap.factor, betz.cap.factor)
 ```
 
+### Temporal aggregation and smoothing
 Finally, we visually inspect the data to find the time of the year when curtailment is highest. We aggregate the data with respect to time and apply temporal smoothing to make the figures legible.
 ```{r temporal.aggregation.2, fig.width=8, fig.height=8}
 dat$date_time<-as.character(dat$date_time)
@@ -641,7 +650,7 @@ I believe we are seeing a sharp decrease in curtailment on the weekends. Notice 
 **********
 Prediction
 --------------------------------------
-### Fit a local-polynomial power curve
+### Fit a local-polynomial power curve model
 Now that we have characterized windspeeds for this region (Weibull distribution) and estimated the power curve (power output given a windspeed), we can sample from the Weibull distribution to generate new wind data and compute the expected power output.  To make the power curve a continuous function (rather than discrete), we fit a polynomial function to it. *Local* polynomial estimation techniques (e.g. k-nearest neigbor and kernel density) offer advantages to to global fits.  In local estimation techniques, fitting is performed within small neighborhoods, resulting in improved goodness of fit with a lower polynomial order. The concept is similar to a moving average, and smoothing splines. Here we fit two local polynomial models, one to the observations, and a second to the manufacturers power curve.  Choosing one or the other is a matter of preference and philosophy (do you trust the turbines to work precisely to the manufacturer specifications, or do you trust your own measurements?)
 ```{r local.polynomial.model, eval=TRUE, message=FALSE}
 library(locfit)
@@ -660,6 +669,7 @@ lines(y=MPC$design_sentout_10min_kwh, x=MPC$windspeed_mps, col="black", lty=1, l
 legend("bottomright", legend=c("Manufacturer's Power Curve", "Local Polynomial Model Fit"), col=c("black", "red"), lty=c(1,2), lwd=c(1, 1))
 ```
 
+### Predict on the model
 Now we can predict energy generation given a probabilistic (Weibull) distribution of windspeeds and the fitted power curve model (local polynomial).
 ```{r predict}
 # Use a Weibull distribution to randomly generate one-year of 10-minute average windspeeds using the same shape and scale factor as the observed windspeeds
