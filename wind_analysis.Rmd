@@ -687,5 +687,35 @@ sum(expected.gen.manufacturer)/(850*7*8760)
 plot(expected.gen.empirical ~ expected.wind, col="blue", ylim=c(0, 850*7/6), xlim=c(0,20), pch=20, main="Comparing Two Prediction Techniques", ylab="Expected Gen. (kWh/10min)", xlab="Expected Wind (mps)")
 points(y=expected.gen.manufacturer, x=expected.wind, col="red", pch=20)
 legend("topleft", legend=c("Fit to Empirical Data", "Fit to Manufacturer's Power Curve"), col=c("blue", "red"), pch=c(20,20))
+```
 
+```{r ensemble_forecast, cache=TRUE}
+for (i in 1:500){
+  # Use a Weibull distribution to randomly generate one-year of 10-minute average windspeeds using the same shape and scale factor as the observed windspeeds
+  windspeeds<-rweibull(8760*6, shape=weibull.fit$estimate[1], scale=weibull.fit$estimate[2])
+#   if (i==1){expected.wind<-windspeeds} else
+#     expected.wind<-rbind(expected.wind, windspeeds)  
+  
+  # estimate generation given new windspeeds
+  gen.mpc<-predict(manufacturer.mod, newdata=windspeeds)
+  if (i==1){expected.gen.mpc<-gen.mpc} else
+    expected.gen.mpc<-rbind(expected.gen.mpc, gen.mpc)
+
+  # estimate generation given new windspeeds
+  gen.empirical<-predict(empirical.mod, newdata=windspeeds)
+  if (i==1){expected.gen.empirical<-gen.empirical} else
+    expected.gen.empirical<-rbind(expected.gen.empirical, gen.empirical)
+  }
+  
+# compute annual generation from the hourly estimated generation. 1 annual value per simulation
+ann.gen.mpc<-apply(expected.gen.mpc, 1, sum)
+ann.gen.empirical<-apply(expected.gen.empirical, 1, sum)
+
+# compute capacity factor in each year
+cf.mpc<-ann.gen.mpc/(850*7*8760)
+cf.empirical<-ann.gen.empirical/(850*7*8760)
+
+# show the range of estimates for capacity factor given the ensemble forecast
+boxplot(cf.mpc, main="Capacity Factor Simulation\n w. Weibull Distribution and the MPC", ylab="Capacity Factor")
+boxplot(cf.empirical, main="Capacity Factor Simulation\n w. Weibull Distribution and the Empirical Power Curve", ylab="Capacity Factor")
 ```
