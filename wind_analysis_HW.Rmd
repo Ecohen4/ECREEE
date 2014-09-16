@@ -2,7 +2,7 @@
 title: "Wind Analysis Homework"
 author: "Elliot Cohen, Sustainable Engineering Lab"
 date: "September 16, 2014"
-output: html_document
+output: pdf_document
 ---
 <link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>
 
