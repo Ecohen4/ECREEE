@@ -1,70 +1,74 @@
 ---
 title: "Wind Analysis Homework"
-author: "Elliot Cohen, Sustainable Engineering Lab"
+author: "by Elliot Cohen, for MECE e4210"
 date: "September 16, 2014"
 output: pdf_document
 ---
 <link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>
 
+# Part 1: Wind Energy
 ## Problem Statement
-Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean. The islands already have one wind farm up and running, with 7 Vestas wind turbines (v52-850Kw) rated @ 850kW each. The combined rated capacity of the 7 turbines is `r 850*7` kW, which is roughly `r round((850*7)/7926.5, digits=0)*100`% of the annual average power demand for the island! This is a huge penetration of wind! 10-minute average wind speed and cummulative wind energy production data are provided by the utility for the most recent year, in .xlsx spreadsheet format. Hourly load (e.g. demand) was estimated in-house from the load profile of a nearby island, and is provided in a separate .xlsx spreasheet.
+Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean. The islands already have one wind farm up and running, with 7 Vestas wind turbines (v52-850Kw) rated at 850kW each. The combined rated capacity of the 7 turbines is `r 850*7` kW, which is roughly `r trunc((850*7)/7926.5, digits=0)*100`% of the annual average power demand for the island! This is a huge penetration of wind! Pairwise observations of [10-minute average wind speed and cummulative wind energy production](https://github.com/Ecohen4/ECREEE/blob/master/WIND_VXE_2013_ORIGINAL.xls) data are provided by the utility for the most recent year, in .xls format (click "view raw" to download). [Hourly demand](https://github.com/Ecohen4/ECREEE/blob/master/VXE_Estimated_Hourly_Load.csv) was estimated in-house from the load profile of a nearby island, and is provided in .csv format.
 
-Using this data, please prepare the following for an investor meeting coming up next week! Be sure to document any assumptions, equations or algorithims implimented, and include **all** underlying R code in a well-commented [Rmarkdown](http://rmarkdown.rstudio.com/) file, [knit(http://yihui.name/knitr/) (e.g. rendered) into a clean .html or .pdf file.
+Using this data, prepare the following material for an investor meeting coming up next week! Be sure to document any assumptions, equations or algorithims implimented, and include all underlying R code in a well-commented [Rmarkdown](http://rmarkdown.rstudio.com/) file. [Knit](http://yihui.name/knitr/) (e.g. render) the .rmd into a clean .html or .pdf file for review.
 
 1. Visually inspect the data! 
     + Does it make sense? 
     + Are there any obvious issues, such as missing data, incomplete records or suspect values?
-2. Summarize the data in a few simple ways to make sure the values make sense (use benchmark comparisons!).
+2. Compute summary statistics to make sure the values make sense (use benchmark comparisons!).
 3. Clean the data. There are two schools of thought on this:
-    + Option 1: Remove all records containing suspect data (e.g. if the wind and/or power data at a given timestamp are not possible on their own *or* do not make sense together as a pairwise observation.  Could you produce 400kw at 0 windspeed?). 
-        + Use textbook knowledge of wind energy systems as a simple check (hint: Betz Limit!)
-    + Option 2: Data correction, again using textbook knowledge of the system.
-    + After implementing step 3 (option 1 or 2), you should have a "clean" dataset. Now make engineering computations with confidence! Proceed with steps 4-9 (and 10-11 if you're extra ambitious!)
+    + Option 1: Remove all records containing suspect/questionable data. For example:
+        + Can you have negative energy values?
+        + Can you produce 400kw at 0 windspeed? 
+        + If the wind and/or power data at a given timestamp are not reasonable on their own *or* do not make sense together as a pairwise observation, omit them.
+        + Use textbook knowledge of wind energy systems as one check (hint: Betz Limit!)
+        + Keep track of how many observations you remove!
+    + Option 2: Data correction, using textbook knowledge (hint: turbine power curve!).
+    + After implementing step 3 (option 1 or 2), you should have a "clean" dataset. Now make engineering computations with confidence! Proceed to steps 4-9 (and 10-11 if you're extra ambitious!)
 4. Total wind energy produced last year (e.g. KWh delivered to the grid).
 5. Capacity factor of the current system.
 6. Total wind energy that was *possible* given the observed windspeeds and the [turbine power curve](https://github.com/Ecohen4/ECREEE/blob/master/v52-850KW-power-curve.csv). This is the uncurtailed power output.
-7. Uncurtailed capacity factor using the result from 6 (this assumes the grid could accept all wind power output). 
-8. Turbine efficiency:
-    + average for the entire windfarm; and
-    + as a function of windspeed.
-    + compare with the Betz Limit.
+7. Uncurtailed capacity factor using the result from 6 (this assumes the grid can accept the full uncurtailed power output). 
+8. Turbine efficiency (hint: you will have to compute the kinetic energy contained in the wind!):
+    + average efficiency for the entire windfarm; and
+    + efficiency as a function of windspeed.
+    + compare with Betz Limit.
 9. Characterization of the wind resource using a Weibull distribution.  
 10. **BONUS** Randomly generate a year's worth of new windspeed data according to the fitted Weibull distrubution. Using the new windspeeds, predict what the resulting wind energy production may look like next year.  
 11. **BONUS**: Repeat step 10 500 times and compute the capacity factor each time. Boxplot the results of the 500 simulations. This is called an ensemble forecast.  
 
-Now suppose you have reason to beleive that the anemometor (wind speed gage) was off by a few meters per second, for a few months of the year.  The system engineer tells you that the anemometer was reading high. What does that mean? How could you correct the windspeed?  (hint: use the [manufacturer's power curve](https://github.com/Ecohen4/ECREEE/blob/master/v52-850KW-power-curve.csv)). Did you observe this issue in step 3? How did you handle it?  If in step 3 you chose to remove all suspect data, that's fine, but now go back and try a windspeed correction. If you already did a windspeed correction, go back and try removing the data. Compare the results. 
+Now suppose you have reason to beleive that the anemometor (wind speed gage) was off by a few meters per second, for a few months of the year.  The system engineer tells you that the anemometer was reading high. What does that look like if you plot power output vs windspeed? How could you correct the windspeed data?  (hint: use the [manufacturer's power curve](https://github.com/Ecohen4/ECREEE/blob/master/v52-850KW-power-curve.csv)). Did you observe this issue in step 3? How did you handle it?  If in step 3 you chose to remove the suspect data, that's fine, but now go back and try a windspeed correction. If you already did a windspeed correction, go back and try removing the data. Compare the results. 
 
 Everyone should now have completed steps 3-9, twice! Once with each data cleaning option.
 
-### Additional instructions
-This bulk of this assignment (steps 1:9) can be done in Excel. This is often a good starting point, as it allows you to focus on the engineering concepts, not programming concepts. Steps 9-11 are far easier to do in R or another scripting language (e.g. Python, Matlab, etc...) than it would be to do in Excel, if at all possible.
+### Submission instructions
+This bulk of this assignment (steps 1:9) can be done in Excel. This is often a good starting point, as it allows you to focus on the engineering concepts, not programming concepts. Steps 9-11 are far easier to do in R or another scripting language (e.g. Python, Matlab, etc...) than it would be to do in Excel, if even possible.
 
-You may do the assignment in either platform. We recommend staring in Excel to see how far that takes you, and then move into R for more advanced (and faster) analysis and vizualization.
+We recommend starting in Excel to see how far that takes you, and then move into R for more advanced (and faster) analysis and vizualization. Utlimately, the final report must be compiled in R, using [Rmarkdown](http://rmarkdown.rstudio.com/) and [Knitr](http://yihui.name/knitr/), as described previously.
 
 Whatever you do, be sure to COMMENT your work clearly and succinctly.
 
 ### Key concepts covered in this assignment
 - **Power curve**: Relationship between wind speed and power output for a wind turbine.
 - **Weibull distribution**: Characterization of the wind resource for a given location (e.g. estimate parameters for a statistical distribution fit to the wind speed data)
-- **Capacity factor** (optimal and actual): Energy output / (nameplate capacity x time)
+- **Capacity factor**: Energy output / (nameplate capacity x time)
 
-## Hints if you get stuck:
+## Hints if you get stuck
 ### Useful functions in Microsoft Excel
 - **VLOOKUP**( lookup value, array, col num, [lookup range] )
-    + Lookup a value in a column of an array based on the closest matching value in another column of the array.  
-    + e.g., each row of the Manufacturer's Power Curve array contains a windspeed and corresponding power output. Use VLOOKUP to supply a random windspeed, query the array and return the corresponding power output.  
-- **IF** ( condition, statement, else if, statement )  
+    + Lookup a value in a column of an array based on the closest matching value in another column of the array.
+    + e.g., each row of the Manufacturer's Power Curve array contains a windspeed and corresponding power output. Use VLOOKUP to supply a random windspeed, query the array and return the corresponding power output.
+- **IF** ( condition, statement, else if, statement )
     + Useful conditional with many applications
-- **FREQUENCY** ( data, bins )  
+- **FREQUENCY** ( data, bins )
     + Counts the number of observations that fall in each bin.
-- **WEIBULL.DIST** ( value, shape factor, scale factor )  
-Estimates the probability of a value given the fitted parameters of a Weibull distribution.  
+- **WEIBULL.DIST** ( value, shape factor, scale factor )
+Estimates the probability of a value given the fitted parameters of a Weibull distribution.
 
-
-### Useful functions in R:
+### Useful functions in R
 - **str**(df)
     + Look at the structure of any object
-- **head(df)** 
+- **head(df)**
     + Look at the first 6 rows of an array-like object (especially useful for data.frames and arrays).
 - **read.csv**("file_name", optional_arguments)
     + For reading .csv data into R.
@@ -78,7 +82,6 @@ Estimates the probability of a value given the fitted parameters of a Weibull di
     + For each subset of a data frame, apply some function then combine results into a data frame.
 - **ggplot2::ggplot**(df, aes(x, y, , other aesthetics))
     + ggplot() is typically used to construct a plot incrementally, using the + operator to add layers to the existing ggplot object.
-
 
 ### Data extraction from .csv
 Extract only the data you need from the raw data:
@@ -109,3 +112,16 @@ Compute the acutal (curtailed) capacity factor, as well as the possible (uncurta
 
 ```CF_actual = Energy Delivered / (nameplate capacity x time)```
 ```CF_optimal= Energy Possible / (nameplate capacity x time)```
+
+*******************
+Part 2: Grid Integration of Wind Energy
+===================
+In Part 1, we analyzed windspeed and power output data for a real, working windfarm! Now let's consider grid-integration of the wind. That is, how does wind energy fit into a networked power system (e.g. grid) with highly varialbe supply and demand?
+
+Let's assume the full uncrutailed wind power output computed in Part 1.6 may be deleivered to the grid, up to the total load (e.g. demand) of the island, for each hour of the year. Thus we re-define "curtailment" in this context to mean available wind power in excess of total load. That is, if we ignore all baseload energy generation (or assume it can be turned on/off in an instant), we still cannot utilize more wind energy than there is demand for it. To better understand *when* curtailment is most common, plot the average hourly curtailment, by month. [Compute mean curtailment for mindnight-1am, 1am-2am, 2am-3am.. etc... for each month. You will end up with 24 values x 12 months]. Repeat for average hourly wind production (which you need to compute curtailment, anyway).
+
+Finally, assume there is a pumped hydro storage system with 5 MWh of storage. Whenver you have wind power in excess of demand, use the excess energy to pump water from a lower reservoir to an upper reservoir. Assume a pump efficiency of 85%. Then, when energy demand exceeds wind power, release water from the upper reservoir back down to the lower reservoir, passing through a penstock with hydroelectric turbines operating at 90% efficiency. 
+
+How does this storage system effect the overall ability to utilize wind energy?  What is the new capacity factor of the windfarm, given this ability to store excess energy (up to 5 MWh).  Write out a simple algorithim to capture this behaviour *before* attempting to code it up in R.  In other words, write it in psuedo-code using simple language and artithmetic, before worrying about syntax. Include both the psuedo-code and R code in your final report. Document any assumptions, and have fun!
+
+
