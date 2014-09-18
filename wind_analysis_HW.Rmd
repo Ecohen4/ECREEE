@@ -7,22 +7,37 @@ output: pdf_document
 <link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>
 
 ## Problem Statement
-Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean.  The islands already have one wind farm up and running. Investors want to know the following:  
-1. Total wind energy produced last year.  
-2. Capacity factor of the current system.  
-3. Uncurtailed capacity factor given observed windspeeds and assuming the grid can accept all energy produced.  
-4. Turbine efficiency (averaged over the entire windfarm).  
-5. Characterization of the wind resource using a Weibull distribution.  
-6. Randomly generate a year's worth of new windspeed data according to the fitted Weibull distrubution. Using the new windspeeds, predict what the resulting wind energy production may look like next year.  
-7. Repeat step 6 500 times and compute the capacity factor each time. Boxplot the results of the 500 simulations. This is called an ensemble forecast.  
+Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean. The islands already have one wind farm up and running, with 7 Vestas wind turbines (v52-850Kw) rated @ 850kW each. The combined rated capacity of the 7 turbines is `r 850*7` kW, which is roughly `r round((850*7)/7926.5, digits=0)*100`% of the annual average power demand for the island! This is a huge penetration of wind! 10-minute average wind speed and cummulative wind energy production data are provided by the utility for the most recent year, in .xlsx spreadsheet format. Hourly load (e.g. demand) was estimated in-house from the load profile of a nearby island, and is provided in a separate .xlsx spreasheet.
 
-Before you begin, you must consider the possibility that the data is not perfect.  How will you handle missing data?  How will you prevent possible erroneous values from influencing your results? Clearly describe any data cleaning you do at each step (if any). 
+Using this data, please prepare the following for an investor meeting coming up next week! Be sure to document any assumptions, equations or algorithims implimented, and include **all** underlying R code in a well-commented [Rmarkdown](http://rmarkdown.rstudio.com/) file, [knit(http://yihui.name/knitr/) (e.g. rendered) into a clean .html or .pdf file.
 
-Now suppose you have reason to beleive that the anemometor (wind speed gage) was off by a few meters per second, for a few months of the year.  The system engineer tells you that the anemometer was reading high. What does that mean? How could you correct the windspeed?  Explain in a few sentences one way to do so. (hint: use the manufacturer's power curve).
-Now **repeat steps 1:7** with the corrected windspeed data. Compare the results.
+1. Visually inspect the data! 
+    + Does it make sense? 
+    + Are there any obvious issues, such as missing data, incomplete records or suspect values?
+2. Summarize the data in a few simple ways to make sure the values make sense (use benchmark comparisons!).
+3. Clean the data. There are two schools of thought on this:
+    + Option 1: Remove all records containing suspect data (e.g. if the wind and/or power data at a given timestamp are not possible on their own *or* do not make sense together as a pairwise observation.  Could you produce 400kw at 0 windspeed?). 
+        + Use textbook knowledge of wind energy systems as a simple check (hint: Betz Limit!)
+    + Option 2: Data correction, again using textbook knowledge of the system.
+    + After implementing step 3 (option 1 or 2), you should have a "clean" dataset. Now make engineering computations with confidence! Proceed with steps 4-9 (and 10-11 if you're extra ambitious!)
+4. Total wind energy produced last year (e.g. KWh delivered to the grid).
+5. Capacity factor of the current system.
+6. Total wind energy that was *possible* given the observed windspeeds and the [turbine power curve](https://github.com/Ecohen4/ECREEE/blob/master/v52-850KW-power-curve.csv). This is the uncurtailed power output.
+7. Uncurtailed capacity factor using the result from 6 (this assumes the grid could accept all wind power output). 
+8. Turbine efficiency:
+    + average for the entire windfarm; and
+    + as a function of windspeed.
+    + compare with the Betz Limit.
+9. Characterization of the wind resource using a Weibull distribution.  
+10. **BONUS** Randomly generate a year's worth of new windspeed data according to the fitted Weibull distrubution. Using the new windspeeds, predict what the resulting wind energy production may look like next year.  
+11. **BONUS**: Repeat step 10 500 times and compute the capacity factor each time. Boxplot the results of the 500 simulations. This is called an ensemble forecast.  
+
+Now suppose you have reason to beleive that the anemometor (wind speed gage) was off by a few meters per second, for a few months of the year.  The system engineer tells you that the anemometer was reading high. What does that mean? How could you correct the windspeed?  (hint: use the [manufacturer's power curve](https://github.com/Ecohen4/ECREEE/blob/master/v52-850KW-power-curve.csv)). Did you observe this issue in step 3? How did you handle it?  If in step 3 you chose to remove all suspect data, that's fine, but now go back and try a windspeed correction. If you already did a windspeed correction, go back and try removing the data. Compare the results. 
+
+Everyone should now have completed steps 3-9, twice! Once with each data cleaning option.
 
 ### Additional instructions
-This bulk of this assignment (steps 1:5) can be done in Excel. This is often a good starting point, as it allows you to focus on the engineering concepts, not programming concepts. Steps 5 and 6 are far easier to do in R or another scripting language (e.g. Python, Matlab, etc...) than it would be to do in Excel, if even possible.
+This bulk of this assignment (steps 1:9) can be done in Excel. This is often a good starting point, as it allows you to focus on the engineering concepts, not programming concepts. Steps 9-11 are far easier to do in R or another scripting language (e.g. Python, Matlab, etc...) than it would be to do in Excel, if at all possible.
 
 You may do the assignment in either platform. We recommend staring in Excel to see how far that takes you, and then move into R for more advanced (and faster) analysis and vizualization.
 
