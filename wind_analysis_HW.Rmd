@@ -35,7 +35,7 @@ Using this data, prepare the following material for an investor meeting coming u
     + compare with Betz Limit.
 9. Characterization of the wind resource using a Weibull distribution.  
 10. **BONUS** Randomly generate a year's worth of new windspeed data according to the fitted Weibull distrubution. Using the new windspeeds, predict what the resulting wind energy production may look like next year.  
-11. **BONUS**: Repeat step 10 500 times and compute the capacity factor each time. Boxplot the results of the 500 simulations. This is called an ensemble forecast.  
+11. **BONUS** Repeat step 10 500 times and compute the capacity factor each time. Boxplot the results of the 500 simulations. This is called an ensemble forecast.  
 
 Now suppose you have reason to beleive that the anemometor (wind speed gage) was off by a few meters per second, for a few months of the year.  The system engineer tells you that the anemometer was reading high. What does that look like if you plot power output vs windspeed? How could you correct the windspeed data?  (hint: use the [manufacturer's power curve](https://github.com/Ecohen4/ECREEE/blob/master/v52-850KW-power-curve.csv)). Did you observe this issue in step 3? How did you handle it?  If in step 3 you chose to remove the suspect data, that's fine, but now go back and try a windspeed correction. If you already did a windspeed correction, go back and try removing the data. Compare the results. 
 
@@ -109,13 +109,10 @@ To correct the windspeed, we look up the windspeed cooresponding to 400kw on the
 
 ### Computing capacity factor
 Compute the acutal (curtailed) capacity factor, as well as the possible (uncurtailed) capacity factor according to the MPC and SCADA Possible_Power measurements, respectively. Recall that capacity factor is simply the total amount of energy generated in one year divided by the installed capacity of the system times the number of hours in one year.
+```CF_actual = Energy Delivered / (nameplate capacity x time)```  
+```CF_optimal= Energy Possible / (nameplate capacity x time)```  
 
-```CF_actual = Energy Delivered / (nameplate capacity x time)```
-```CF_optimal= Energy Possible / (nameplate capacity x time)```
-
-*******************
-Part 2: Grid Integration of Wind Energy
-===================
+# Part 2: Grid Integration of Wind Energy
 In Part 1, we analyzed windspeed and power output data for a real, working windfarm! Now let's consider grid-integration of the wind. That is, how does wind energy fit into a networked power system (e.g. grid) with highly varialbe supply and demand?
 
 Let's assume the full uncrutailed wind power output computed in Part 1.6 may be deleivered to the grid, up to the total load (e.g. demand) of the island, for each hour of the year. Thus we re-define "curtailment" in this context to mean available wind power in excess of total load. That is, if we ignore all baseload energy generation (or assume it can be turned on/off in an instant), we still cannot utilize more wind energy than there is demand for it. To better understand *when* curtailment is most common, plot the average hourly curtailment, by month. [Compute mean curtailment for mindnight-1am, 1am-2am, 2am-3am.. etc... for each month. You will end up with 24 values x 12 months]. Repeat for average hourly wind production (which you need to compute curtailment, anyway).
