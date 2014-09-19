@@ -690,32 +690,61 @@ legend("topleft", legend=c("Fit to Empirical Data", "Fit to Manufacturer's Power
 ```
 
 ```{r ensemble_forecast, cache=TRUE}
-for (i in 1:500){
-  # Use a Weibull distribution to randomly generate one-year of 10-minute average windspeeds using the same shape and scale factor as the observed windspeeds
-  windspeeds<-rweibull(8760*6, shape=weibull.fit$estimate[1], scale=weibull.fit$estimate[2])
-#   if (i==1){expected.wind<-windspeeds} else
-#     expected.wind<-rbind(expected.wind, windspeeds)  
-  
-  # estimate generation given new windspeeds
-  gen.mpc<-predict(manufacturer.mod, newdata=windspeeds)
-  if (i==1){expected.gen.mpc<-gen.mpc} else
-    expected.gen.mpc<-rbind(expected.gen.mpc, gen.mpc)
+windspeeds<-array(data=0, dim=c(500, 8760*6))
+gen.mpc<-array(data=0, dim=c(500, 8760*6))
+gen.epc<-array(data=0, dim=c(500, 8760*6))
 
-  # estimate generation given new windspeeds
-  gen.empirical<-predict(empirical.mod, newdata=windspeeds)
-  if (i==1){expected.gen.empirical<-gen.empirical} else
-    expected.gen.empirical<-rbind(expected.gen.empirical, gen.empirical)
-  }
+for (i in 1:500) {
+  # Use a Weibull distribution to randomly generate one-year of 10-minute average windspeeds using the same shape and scale factor as the observed windspeeds
+  windspeeds[i, ]<-rweibull(8760*6, shape=weibull.fit$estimate[1], scale=weibull.fit$estimate[2])
   
-# compute annual generation from the hourly estimated generation. 1 annual value per simulation
-ann.gen.mpc<-apply(expected.gen.mpc, 1, sum)
-ann.gen.empirical<-apply(expected.gen.empirical, 1, sum)
+  # predict generation given new windspeeds using two different power curves
+  gen.mpc[i, ]<-predict(manufacturer.mod, newdata=windspeeds[i, ])
+  gen.epc[i, ]<-predict(empirical.mod, newdata=windspeeds[i, ])
+  }    # end for-loop.
+
+# # create time series object with daily data
+# ten.min.wind <- ts(t(windspeeds), 
+#                    start = c(2013, 1), 
+#                    end=c(2013, 365), 
+#                    frequency = 24*6,
+#                    class="mts"
+#                    )
+# 
+# test <- ts(t(windspeeds), 
+#            start = c(2013, 1), 
+#            frequency = 24*6,
+#            class="matrix"
+#            )
+# 
+# # pass daily data into smoothing function
+# smooth.ts<-function(dat, title){
+#   daily<-aggregate(dat, nfrequency=365, ts.eps=1, FUN=mean)
+#   weekly<-aggregate(dat, nfrequency=52, ts.eps=1, FUN=mean)             
+#   monthly<-aggregate(dat, nfrequency=12, ts.eps=1, FUN=mean)
+#   par(mfrow=c(3,1))
+#   par(oma=c(0,0,2,0))             # set outter margins
+#   par(mar=c(2,4,2,2) + 0.1)       # set plot margins
+#   # par(mar=c(5,4,4,2) + 0.1.)    # default (bottom, left, top, right)
+#   plot(daily, cex.lab=1.2, cex.axis=1.2)
+#   plot(weekly, cex.lab=1.2, cex.axis=1.2)
+#   plot(monthly, cex.lab=1.2, cex.axis=1.2)
+#   title(main=title, outer=TRUE, cex.main=1.5)
+#   }
+# 
+# # apply time-series smoothing function
+# smooth.ts(daily, title="Wind energy generation forecast for VXE")
+
+################
+
+# compute annual generation from the hourly estimated generation.
+ann.gen.mpc<-apply(gen.mpc, 1, sum)
+ann.gen.epc<-apply(gen.epc, 1, sum)
+ann.gen<-cbind(ann.gen.mpc, ann.gen.epc)
 
 # compute capacity factor in each year
-cf.mpc<-ann.gen.mpc/(850*7*8760)
-cf.empirical<-ann.gen.empirical/(850*7*8760)
+cf<-ann.gen/(850*7*8760)
 
 # show the range of estimates for capacity factor given the ensemble forecast
-boxplot(cf.mpc, main="Capacity Factor Simulation\n w. Weibull Distribution and the MPC", ylab="Capacity Factor")
-boxplot(cf.empirical, main="Capacity Factor Simulation\n w. Weibull Distribution and the Empirical Power Curve", ylab="Capacity Factor")
+boxplot(cf, main="Capacity Factor Simulation", sub="Winspeed randomly sampled from a Weibull Distribution\nPower estimated from Manufacturer and Empirical Power Curves", ylab="Capacity Factor", ylim=c(0,1), names=c("manufacturer", "empirical"))
 ```
