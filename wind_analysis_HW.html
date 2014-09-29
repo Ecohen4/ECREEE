@@ -9,7 +9,7 @@
 <meta http-equiv="Content-Style-Type" content="text/css" />
 <meta name="generator" content="pandoc" />
 
-<meta name="author" content="Elliot Cohen, Sustainable Engineering Lab" />
+<meta name="author" content="by Elliot Cohen, for MECE e4210" />
 
 <meta name="date" content="2014-09-16" />
 
@@ -55,21 +55,58 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 
 <div id="header">
 <h1 class="title">Wind Analysis Homework</h1>
-<h4 class="author"><em>Elliot Cohen, Sustainable Engineering Lab</em></h4>
+<h4 class="author"><em>by Elliot Cohen, for MECE e4210</em></h4>
 <h4 class="date"><em>September 16, 2014</em></h4>
 </div>
 
 
 <p><link href="data:text/css,body%7B%0A%20%20%20%20margin%3A%200%20auto%3B%0A%20%20%20%20font%2Dfamily%3A%20Georgia%2C%20Palatino%2C%20serif%3B%0A%20%20%20%20color%3A%20%23444444%3B%0A%20%20%20%20line%2Dheight%3A%201%3B%0A%20%20%20%20max%2Dwidth%3A%20960px%3B%0A%20%20%20%20padding%3A%2030px%3B%0A%7D%0Ah1%2C%20h2%2C%20h3%2C%20h4%20%7B%0A%20%20%20%20color%3A%20%23111111%3B%0A%20%20%20%20font%2Dweight%3A%20400%3B%0A%7D%0Ah1%2C%20h2%2C%20h3%2C%20h4%2C%20h5%2C%20p%20%7B%0A%20%20%20%20margin%2Dbottom%3A%2024px%3B%0A%20%20%20%20padding%3A%200%3B%0A%7D%0Ah1%20%7B%0A%20%20%20%20font%2Dsize%3A%2048px%3B%0A%7D%0Ah2%20%7B%0A%20%20%20%20font%2Dsize%3A%2036px%3B%0A%20%20%20%20%2F%2A%20The%20bottom%20margin%20is%20small%2E%20It%27s%20designed%20to%20be%20used%20with%20gray%20meta%20text%0A%20%20%20%20%20%2A%20below%20a%20post%20title%2E%20%2A%2F%0A%20%20%20%20margin%3A%2024px%200%206px%3B%0A%7D%0Ah3%20%7B%0A%20%20%20%20font%2Dsize%3A%2024px%3B%0A%7D%0Ah4%20%7B%0A%20%20%20%20font%2Dsize%3A%2021px%3B%0A%7D%0Ah5%20%7B%0A%20%20%20%20font%2Dsize%3A%2018px%3B%0A%7D%0Aa%20%7B%0A%20%20%20%20color%3A%20%230099ff%3B%0A%20%20%20%20margin%3A%200%3B%0A%20%20%20%20padding%3A%200%3B%0A%20%20%20%20vertical%2Dalign%3A%20baseline%3B%0A%7D%0Aa%3Ahover%20%7B%0A%20%20%20%20text%2Ddecoration%3A%20none%3B%0A%20%20%20%20color%3A%20%23ff6600%3B%0A%7D%0Aa%3Avisited%20%7B%0A%20%20%20%20color%3A%20purple%3B%0A%7D%0Aul%2C%20ol%20%7B%0A%20%20%20%20padding%3A%200%3B%0A%20%20%20%20margin%3A%200%3B%0A%7D%0Ali%20%7B%0A%20%20%20%20line%2Dheight%3A%2024px%3B%0A%7D%0Ali%20ul%2C%20li%20ul%20%7B%0A%20%20%20%20margin%2Dleft%3A%2024px%3B%0A%7D%0Ap%2C%20ul%2C%20ol%20%7B%0A%20%20%20%20font%2Dsize%3A%2016px%3B%0A%20%20%20%20line%2Dheight%3A%2024px%3B%0A%20%20%20%20max%2Dwidth%3A%20540px%3B%0A%7D%0Apre%20%7B%0A%20%20%20%20padding%3A%200px%2024px%3B%0A%20%20%20%20max%2Dwidth%3A%20800px%3B%0A%20%20%20%20white%2Dspace%3A%20pre%2Dwrap%3B%0A%7D%0Acode%20%7B%0A%20%20%20%20font%2Dfamily%3A%20Consolas%2C%20Monaco%2C%20Andale%20Mono%2C%20monospace%3B%0A%20%20%20%20line%2Dheight%3A%201%2E5%3B%0A%20%20%20%20font%2Dsize%3A%2013px%3B%0A%7D%0Aaside%20%7B%0A%20%20%20%20display%3A%20block%3B%0A%20%20%20%20float%3A%20right%3B%0A%20%20%20%20width%3A%20390px%3B%0A%7D%0Ablockquote%20%7B%0A%20%20%20%20border%2Dleft%3A%2E5em%20solid%20%23eee%3B%0A%20%20%20%20padding%3A%200%202em%3B%0A%20%20%20%20margin%2Dleft%3A0%3B%0A%20%20%20%20max%2Dwidth%3A%20476px%3B%0A%7D%0Ablockquote%20%20cite%20%7B%0A%20%20%20%20font%2Dsize%3A14px%3B%0A%20%20%20%20line%2Dheight%3A20px%3B%0A%20%20%20%20color%3A%23bfbfbf%3B%0A%7D%0Ablockquote%20cite%3Abefore%20%7B%0A%20%20%20%20content%3A%20%27%5C2014%20%5C00A0%27%3B%0A%7D%0A%0Ablockquote%20p%20%7B%20%20%0A%20%20%20%20color%3A%20%23666%3B%0A%20%20%20%20max%2Dwidth%3A%20460px%3B%0A%7D%0Ahr%20%7B%0A%20%20%20%20width%3A%20540px%3B%0A%20%20%20%20text%2Dalign%3A%20left%3B%0A%20%20%20%20margin%3A%200%20auto%200%200%3B%0A%20%20%20%20color%3A%20%23999%3B%0A%7D%0A%0A%2F%2A%20Code%20below%20this%20line%20is%20copyright%20Twitter%20Inc%2E%20%2A%2F%0A%0Abutton%2C%0Ainput%2C%0Aselect%2C%0Atextarea%20%7B%0A%20%20font%2Dsize%3A%20100%25%3B%0A%20%20margin%3A%200%3B%0A%20%20vertical%2Dalign%3A%20baseline%3B%0A%20%20%2Avertical%2Dalign%3A%20middle%3B%0A%7D%0Abutton%2C%20input%20%7B%0A%20%20line%2Dheight%3A%20normal%3B%0A%20%20%2Aoverflow%3A%20visible%3B%0A%7D%0Abutton%3A%3A%2Dmoz%2Dfocus%2Dinner%2C%20input%3A%3A%2Dmoz%2Dfocus%2Dinner%20%7B%0A%20%20border%3A%200%3B%0A%20%20padding%3A%200%3B%0A%7D%0Abutton%2C%0Ainput%5Btype%3D%22button%22%5D%2C%0Ainput%5Btype%3D%22reset%22%5D%2C%0Ainput%5Btype%3D%22submit%22%5D%20%7B%0A%20%20cursor%3A%20pointer%3B%0A%20%20%2Dwebkit%2Dappearance%3A%20button%3B%0A%7D%0Ainput%5Btype%3Dcheckbox%5D%2C%20input%5Btype%3Dradio%5D%20%7B%0A%20%20cursor%3A%20pointer%3B%0A%7D%0A%2F%2A%20override%20default%20chrome%20%26%20firefox%20settings%20%2A%2F%0Ainput%3Anot%28%5Btype%3D%22image%22%5D%29%2C%20textarea%20%7B%0A%20%20%2Dwebkit%2Dbox%2Dsizing%3A%20content%2Dbox%3B%0A%20%20%2Dmoz%2Dbox%2Dsizing%3A%20content%2Dbox%3B%0A%20%20box%2Dsizing%3A%20content%2Dbox%3B%0A%7D%0A%0Ainput%5Btype%3D%22search%22%5D%20%7B%0A%20%20%2Dwebkit%2Dappearance%3A%20textfield%3B%0A%20%20%2Dwebkit%2Dbox%2Dsizing%3A%20content%2Dbox%3B%0A%20%20%2Dmoz%2Dbox%2Dsizing%3A%20content%2Dbox%3B%0A%20%20box%2Dsizing%3A%20content%2Dbox%3B%0A%7D%0Ainput%5Btype%3D%22search%22%5D%3A%3A%2Dwebkit%2Dsearch%2Ddecoration%20%7B%0A%20%20%2Dwebkit%2Dappearance%3A%20none%3B%0A%7D%0Alabel%2C%0Ainput%2C%0Aselect%2C%0Atextarea%20%7B%0A%20%20font%2Dfamily%3A%20%22Helvetica%20Neue%22%2C%20Helvetica%2C%20Arial%2C%20sans%2Dserif%3B%0A%20%20font%2Dsize%3A%2013px%3B%0A%20%20font%2Dweight%3A%20normal%3B%0A%20%20line%2Dheight%3A%20normal%3B%0A%20%20margin%2Dbottom%3A%2018px%3B%0A%7D%0Ainput%5Btype%3Dcheckbox%5D%2C%20input%5Btype%3Dradio%5D%20%7B%0A%20%20cursor%3A%20pointer%3B%0A%20%20margin%2Dbottom%3A%200%3B%0A%7D%0Ainput%5Btype%3Dtext%5D%2C%0Ainput%5Btype%3Dpassword%5D%2C%0Atextarea%2C%0Aselect%20%7B%0A%20%20display%3A%20inline%2Dblock%3B%0A%20%20width%3A%20210px%3B%0A%20%20padding%3A%204px%3B%0A%20%20font%2Dsize%3A%2013px%3B%0A%20%20font%2Dweight%3A%20normal%3B%0A%20%20line%2Dheight%3A%2018px%3B%0A%20%20height%3A%2018px%3B%0A%20%20color%3A%20%23808080%3B%0A%20%20border%3A%201px%20solid%20%23ccc%3B%0A%20%20%2Dwebkit%2Dborder%2Dradius%3A%203px%3B%0A%20%20%2Dmoz%2Dborder%2Dradius%3A%203px%3B%0A%20%20border%2Dradius%3A%203px%3B%0A%7D%0Aselect%2C%20input%5Btype%3Dfile%5D%20%7B%0A%20%20height%3A%2027px%3B%0A%20%20line%2Dheight%3A%2027px%3B%0A%7D%0Atextarea%20%7B%0A%20%20height%3A%20auto%3B%0A%7D%0A%0A%2F%2A%20grey%20out%20placeholders%20%2A%2F%0A%3A%2Dmoz%2Dplaceholder%20%7B%0A%20%20color%3A%20%23bfbfbf%3B%0A%7D%0A%3A%3A%2Dwebkit%2Dinput%2Dplaceholder%20%7B%0A%20%20color%3A%20%23bfbfbf%3B%0A%7D%0A%0Ainput%5Btype%3Dtext%5D%2C%0Ainput%5Btype%3Dpassword%5D%2C%0Aselect%2C%0Atextarea%20%7B%0A%20%20%2Dwebkit%2Dtransition%3A%20border%20linear%200%2E2s%2C%20box%2Dshadow%20linear%200%2E2s%3B%0A%20%20%2Dmoz%2Dtransition%3A%20border%20linear%200%2E2s%2C%20box%2Dshadow%20linear%200%2E2s%3B%0A%20%20transition%3A%20border%20linear%200%2E2s%2C%20box%2Dshadow%20linear%200%2E2s%3B%0A%20%20%2Dwebkit%2Dbox%2Dshadow%3A%20inset%200%201px%203px%20rgba%280%2C%200%2C%200%2C%200%2E1%29%3B%0A%20%20%2Dmoz%2Dbox%2Dshadow%3A%20inset%200%201px%203px%20rgba%280%2C%200%2C%200%2C%200%2E1%29%3B%0A%20%20box%2Dshadow%3A%20inset%200%201px%203px%20rgba%280%2C%200%2C%200%2C%200%2E1%29%3B%0A%7D%0Ainput%5Btype%3Dtext%5D%3Afocus%2C%20input%5Btype%3Dpassword%5D%3Afocus%2C%20textarea%3Afocus%20%7B%0A%20%20outline%3A%20none%3B%0A%20%20border%2Dcolor%3A%20rgba%2882%2C%20168%2C%20236%2C%200%2E8%29%3B%0A%20%20%2Dwebkit%2Dbox%2Dshadow%3A%20inset%200%201px%203px%20rgba%280%2C%200%2C%200%2C%200%2E1%29%2C%200%200%208px%20rgba%2882%2C%20168%2C%20236%2C%200%2E6%29%3B%0A%20%20%2Dmoz%2Dbox%2Dshadow%3A%20inset%200%201px%203px%20rgba%280%2C%200%2C%200%2C%200%2E1%29%2C%200%200%208px%20rgba%2882%2C%20168%2C%20236%2C%200%2E6%29%3B%0A%20%20box%2Dshadow%3A%20inset%200%201px%203px%20rgba%280%2C%200%2C%200%2C%200%2E1%29%2C%200%200%208px%20rgba%2882%2C%20168%2C%20236%2C%200%2E6%29%3B%0A%7D%0A%0A%2F%2A%20buttons%20%2A%2F%0Abutton%20%7B%0A%20%20display%3A%20inline%2Dblock%3B%0A%20%20padding%3A%204px%2014px%3B%0A%20%20font%2Dfamily%3A%20%22Helvetica%20Neue%22%2C%20Helvetica%2C%20Arial%2C%20sans%2Dserif%3B%0A%20%20font%2Dsize%3A%2013px%3B%0A%20%20line%2Dheight%3A%2018px%3B%0A%20%20%2Dwebkit%2Dborder%2Dradius%3A%204px%3B%0A%20%20%2Dmoz%2Dborder%2Dradius%3A%204px%3B%0A%20%20border%2Dradius%3A%204px%3B%0A%20%20%2Dwebkit%2Dbox%2Dshadow%3A%20inset%200%201px%200%20rgba%28255%2C%20255%2C%20255%2C%200%2E2%29%2C%200%201px%202px%20rgba%280%2C%200%2C%200%2C%200%2E05%29%3B%0A%20%20%2Dmoz%2Dbox%2Dshadow%3A%20inset%200%201px%200%20rgba%28255%2C%20255%2C%20255%2C%200%2E2%29%2C%200%201px%202px%20rgba%280%2C%200%2C%200%2C%200%2E05%29%3B%0A%20%20box%2Dshadow%3A%20inset%200%201px%200%20rgba%28255%2C%20255%2C%20255%2C%200%2E2%29%2C%200%201px%202px%20rgba%280%2C%200%2C%200%2C%200%2E05%29%3B%0A%20%20background%2Dcolor%3A%20%230064cd%3B%0A%20%20background%2Drepeat%3A%20repeat%2Dx%3B%0A%20%20background%2Dimage%3A%20%2Dkhtml%2Dgradient%28linear%2C%20left%20top%2C%20left%20bottom%2C%20from%28%23049cdb%29%2C%20to%28%230064cd%29%29%3B%0A%20%20background%2Dimage%3A%20%2Dmoz%2Dlinear%2Dgradient%28top%2C%20%23049cdb%2C%20%230064cd%29%3B%0A%20%20background%2Dimage%3A%20%2Dms%2Dlinear%2Dgradient%28top%2C%20%23049cdb%2C%20%230064cd%29%3B%0A%20%20background%2Dimage%3A%20%2Dwebkit%2Dgradient%28linear%2C%20left%20top%2C%20left%20bottom%2C%20color%2Dstop%280%25%2C%20%23049cdb%29%2C%20color%2Dstop%28100%25%2C%20%230064cd%29%29%3B%0A%20%20background%2Dimage%3A%20%2Dwebkit%2Dlinear%2Dgradient%28top%2C%20%23049cdb%2C%20%230064cd%29%3B%0A%20%20background%2Dimage%3A%20%2Do%2Dlinear%2Dgradient%28top%2C%20%23049cdb%2C%20%230064cd%29%3B%0A%20%20background%2Dimage%3A%20linear%2Dgradient%28top%2C%20%23049cdb%2C%20%230064cd%29%3B%0A%20%20color%3A%20%23fff%3B%0A%20%20text%2Dshadow%3A%200%20%2D1px%200%20rgba%280%2C%200%2C%200%2C%200%2E25%29%3B%0A%20%20border%3A%201px%20solid%20%23004b9a%3B%0A%20%20border%2Dbottom%2Dcolor%3A%20%23003f81%3B%0A%20%20%2Dwebkit%2Dtransition%3A%200%2E1s%20linear%20all%3B%0A%20%20%2Dmoz%2Dtransition%3A%200%2E1s%20linear%20all%3B%0A%20%20transition%3A%200%2E1s%20linear%20all%3B%0A%20%20border%2Dcolor%3A%20%230064cd%20%230064cd%20%23003f81%3B%0A%20%20border%2Dcolor%3A%20rgba%280%2C%200%2C%200%2C%200%2E1%29%20rgba%280%2C%200%2C%200%2C%200%2E1%29%20rgba%280%2C%200%2C%200%2C%200%2E25%29%3B%0A%7D%0Abutton%3Ahover%20%7B%0A%20%20color%3A%20%23fff%3B%0A%20%20background%2Dposition%3A%200%20%2D15px%3B%0A%20%20text%2Ddecoration%3A%20none%3B%0A%7D%0Abutton%3Aactive%20%7B%0A%20%20%2Dwebkit%2Dbox%2Dshadow%3A%20inset%200%203px%207px%20rgba%280%2C%200%2C%200%2C%200%2E15%29%2C%200%201px%202px%20rgba%280%2C%200%2C%200%2C%200%2E05%29%3B%0A%20%20%2Dmoz%2Dbox%2Dshadow%3A%20inset%200%203px%207px%20rgba%280%2C%200%2C%200%2C%200%2E15%29%2C%200%201px%202px%20rgba%280%2C%200%2C%200%2C%200%2E05%29%3B%0A%20%20box%2Dshadow%3A%20inset%200%203px%207px%20rgba%280%2C%200%2C%200%2C%200%2E15%29%2C%200%201px%202px%20rgba%280%2C%200%2C%200%2C%200%2E05%29%3B%0A%7D%0Abutton%3A%3A%2Dmoz%2Dfocus%2Dinner%20%7B%0A%20%20padding%3A%200%3B%0A%20%20border%3A%200%3B%0A%7D%0A" rel="stylesheet" /></p>
+<div id="part-1-wind-energy" class="section level1">
+<h1>Part 1: Wind Energy</h1>
 <div id="problem-statement" class="section level2">
 <h2>Problem Statement</h2>
-<p>Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean. The islands already have one wind farm up and running. Investors want to know the following:<br />1. Total wind energy produced last year.<br />2. Capacity factor of the current system.<br />3. Uncurtailed capacity factor given observed windspeeds and assuming the grid can accept all energy produced.<br />4. Turbine efficiency (averaged over the entire windfarm).<br />5. Characterization of the wind resource using a Weibull distribution.<br />6. Randomly generate a year’s worth of new windspeed data according to the fitted Weibull distrubution. Using the new windspeeds, predict what the resulting wind energy production may look like next year.<br />7. Repeat step 6 500 times and compute the capacity factor each time. Boxplot the results of the 500 simulations. This is called an ensemble forecast.</p>
-<p>Before you begin, you must consider the possibility that the data is not perfect. How will you handle missing data? How will you prevent possible erroneous values from influencing your results? Clearly describe any data cleaning you do at each step (if any).</p>
-<p>Now suppose you have reason to beleive that the anemometor (wind speed gage) was off by a few meters per second, for a few months of the year. The system engineer tells you that the anemometer was reading high. What does that mean? How could you correct the windspeed? Explain in a few sentences one way to do so. (hint: use the manufacturer’s power curve). Now <strong>repeat steps 1:7</strong> with the corrected windspeed data. Compare the results.</p>
-<div id="additional-instructions" class="section level3">
-<h3>Additional instructions</h3>
-<p>This bulk of this assignment (steps 1:5) can be done in Excel. This is often a good starting point, as it allows you to focus on the engineering concepts, not programming concepts. Steps 5 and 6 are far easier to do in R or another scripting language (e.g. Python, Matlab, etc…) than it would be to do in Excel, if even possible.</p>
-<p>You may do the assignment in either platform. We recommend staring in Excel to see how far that takes you, and then move into R for more advanced (and faster) analysis and vizualization.</p>
+<p>Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean. The islands already have one wind farm up and running, with 7 Vestas wind turbines (v52-850Kw) rated at 850kW each. The combined rated capacity of the 7 turbines is 5950 kW, which is roughly 0% of the annual average power demand for the island! This is a huge penetration of wind! Pairwise observations of <a href="https://github.com/Ecohen4/ECREEE/blob/master/WIND_VXE_2013_ORIGINAL.xls">10-minute average wind speed and cummulative wind energy production</a> data are provided by the utility for the most recent year, in .xls format (click “view raw” to download). <a href="https://github.com/Ecohen4/ECREEE/blob/master/VXE_Estimated_Hourly_Load.csv">Hourly demand</a> was estimated in-house from the load profile of a nearby island, and is provided in .csv format.</p>
+<p>Using this data, prepare the following material for an investor meeting coming up next week! Be sure to document any assumptions, equations or algorithims implimented, and include all underlying R code in a well-commented <a href="http://rmarkdown.rstudio.com/">Rmarkdown</a> file. <a href="http://yihui.name/knitr/">Knit</a> (e.g. render) the .rmd into a clean .html or .pdf file for review.</p>
+<ol style="list-style-type: decimal">
+<li>Visually inspect the data!
+<ul>
+<li>Does it make sense?</li>
+<li>Are there any obvious issues, such as missing data, incomplete records or suspect values?</li>
+</ul></li>
+<li>Compute summary statistics to make sure the values make sense (use benchmark comparisons!).</li>
+<li>Clean the data. There are two schools of thought on this:
+<ul>
+<li>Option 1: Remove all records containing suspect/questionable data. For example:
+<ul>
+<li>Can you have negative energy values?</li>
+<li>Can you produce 400kw at 0 windspeed?</li>
+<li>If the wind and/or power data at a given timestamp are not reasonable on their own <em>or</em> do not make sense together as a pairwise observation, omit them.</li>
+<li>Use textbook knowledge of wind energy systems as one check (hint: Betz Limit!)</li>
+<li>Keep track of how many observations you remove!</li>
+</ul></li>
+<li>Option 2: Data correction, using textbook knowledge (hint: turbine power curve!).</li>
+<li>After implementing step 3 (option 1 or 2), you should have a “clean” dataset. Now make engineering computations with confidence! Proceed to steps 4-9 (and 10-11 if you’re extra ambitious!)</li>
+</ul></li>
+<li>Total wind energy produced last year (e.g. KWh delivered to the grid).</li>
+<li>Capacity factor of the current system.</li>
+<li>Total wind energy that was <em>possible</em> given the observed windspeeds and the <a href="https://github.com/Ecohen4/ECREEE/blob/master/v52-850KW-power-curve.csv">turbine power curve</a>. This is the uncurtailed power output.</li>
+<li>Uncurtailed capacity factor using the result from 6 (this assumes the grid can accept the full uncurtailed power output).</li>
+<li>Turbine efficiency (hint: you will have to compute the kinetic energy contained in the wind!):
+<ul>
+<li>average efficiency for the entire windfarm; and</li>
+<li>efficiency as a function of windspeed.</li>
+<li>compare with Betz Limit.</li>
+</ul></li>
+<li>Characterization of the wind resource using a Weibull distribution.<br /></li>
+<li><strong>BONUS</strong> Randomly generate a year’s worth of new windspeed data according to the fitted Weibull distrubution. Using the new windspeeds, predict what the resulting wind energy production may look like next year.<br /></li>
+<li><strong>BONUS</strong> Repeat step 10 500 times and compute the capacity factor each time. Boxplot the results of the 500 simulations. This is called an ensemble forecast.</li>
+</ol>
+<p>Now suppose you have reason to beleive that the anemometor (wind speed gage) was off by a few meters per second, for a few months of the year. The system engineer tells you that the anemometer was reading high. What does that look like if you plot power output vs windspeed? How could you correct the windspeed data? (hint: use the <a href="https://github.com/Ecohen4/ECREEE/blob/master/v52-850KW-power-curve.csv">manufacturer’s power curve</a>). Did you observe this issue in step 3? How did you handle it? If in step 3 you chose to remove the suspect data, that’s fine, but now go back and try a windspeed correction. If you already did a windspeed correction, go back and try removing the data. Compare the results.</p>
+<p>Everyone should now have completed steps 3-9, twice! Once with each data cleaning option.</p>
+<div id="submission-instructions" class="section level3">
+<h3>Submission instructions</h3>
+<p>This bulk of this assignment (steps 1:9) can be done in Excel. This is often a good starting point, as it allows you to focus on the engineering concepts, not programming concepts. Steps 9-11 are far easier to do in R or another scripting language (e.g. Python, Matlab, etc…) than it would be to do in Excel, if even possible.</p>
+<p>We recommend starting in Excel to see how far that takes you, and then move into R for more advanced (and faster) analysis and vizualization. Utlimately, the final report must be compiled in R, using <a href="http://rmarkdown.rstudio.com/">Rmarkdown</a> and <a href="http://yihui.name/knitr/">Knitr</a>, as described previously.</p>
 <p>Whatever you do, be sure to COMMENT your work clearly and succinctly.</p>
 </div>
 <div id="key-concepts-covered-in-this-assignment" class="section level3">
@@ -77,19 +114,19 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 <ul>
 <li><strong>Power curve</strong>: Relationship between wind speed and power output for a wind turbine.</li>
 <li><strong>Weibull distribution</strong>: Characterization of the wind resource for a given location (e.g. estimate parameters for a statistical distribution fit to the wind speed data)</li>
-<li><strong>Capacity factor</strong> (optimal and actual): Energy output / (nameplate capacity x time)</li>
+<li><strong>Capacity factor</strong>: Energy output / (nameplate capacity x time)</li>
 </ul>
 </div>
 </div>
 <div id="hints-if-you-get-stuck" class="section level2">
-<h2>Hints if you get stuck:</h2>
+<h2>Hints if you get stuck</h2>
 <div id="useful-functions-in-microsoft-excel" class="section level3">
 <h3>Useful functions in Microsoft Excel</h3>
 <ul>
 <li><strong>VLOOKUP</strong>( lookup value, array, col num, [lookup range] )
 <ul>
-<li>Lookup a value in a column of an array based on the closest matching value in another column of the array.<br /></li>
-<li>e.g., each row of the Manufacturer’s Power Curve array contains a windspeed and corresponding power output. Use VLOOKUP to supply a random windspeed, query the array and return the corresponding power output.<br /></li>
+<li>Lookup a value in a column of an array based on the closest matching value in another column of the array.</li>
+<li>e.g., each row of the Manufacturer’s Power Curve array contains a windspeed and corresponding power output. Use VLOOKUP to supply a random windspeed, query the array and return the corresponding power output.</li>
 </ul></li>
 <li><strong>IF</strong> ( condition, statement, else if, statement )
 <ul>
@@ -99,11 +136,11 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 <ul>
 <li>Counts the number of observations that fall in each bin.</li>
 </ul></li>
-<li><strong>WEIBULL.DIST</strong> ( value, shape factor, scale factor )<br />Estimates the probability of a value given the fitted parameters of a Weibull distribution.</li>
+<li><strong>WEIBULL.DIST</strong> ( value, shape factor, scale factor ) Estimates the probability of a value given the fitted parameters of a Weibull distribution.</li>
 </ul>
 </div>
 <div id="useful-functions-in-r" class="section level3">
-<h3>Useful functions in R:</h3>
+<h3>Useful functions in R</h3>
 <ul>
 <li><strong>str</strong>(df)
 <ul>
@@ -161,9 +198,16 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 </div>
 <div id="computing-capacity-factor" class="section level3">
 <h3>Computing capacity factor</h3>
-<p>Compute the acutal (curtailed) capacity factor, as well as the possible (uncurtailed) capacity factor according to the MPC and SCADA Possible_Power measurements, respectively. Recall that capacity factor is simply the total amount of energy generated in one year divided by the installed capacity of the system times the number of hours in one year.</p>
-<p><code>CF_actual = Energy Delivered / (nameplate capacity x time)</code> <code>CF_optimal= Energy Possible / (nameplate capacity x time)</code></p>
+<p>Compute the acutal (curtailed) capacity factor, as well as the possible (uncurtailed) capacity factor according to the MPC and SCADA Possible_Power measurements, respectively. Recall that capacity factor is simply the total amount of energy generated in one year divided by the installed capacity of the system times the number of hours in one year. <code>CF_actual = Energy Delivered / (nameplate capacity x time)</code><br /><code>CF_optimal= Energy Possible / (nameplate capacity x time)</code></p>
 </div>
+</div>
+</div>
+<div id="part-2-grid-integration-of-wind-energy" class="section level1">
+<h1>Part 2: Grid Integration of Wind Energy</h1>
+<p>In Part 1, we analyzed windspeed and power output data for a real, working windfarm! Now let’s consider grid-integration of the wind. That is, how does wind energy fit into a networked power system (e.g. grid) with highly varialbe supply and demand?</p>
+<p>Let’s assume the full uncrutailed wind power output computed in Part 1.6 may be deleivered to the grid, up to the total load (e.g. demand) of the island, for each hour of the year. Thus we re-define “curtailment” in this context to mean available wind power in excess of total load. That is, if we ignore all baseload energy generation (or assume it can be turned on/off in an instant), we still cannot utilize more wind energy than there is demand for it. To better understand <em>when</em> curtailment is most common, plot the average hourly curtailment, by month. [Compute mean curtailment for mindnight-1am, 1am-2am, 2am-3am.. etc… for each month. You will end up with 24 values x 12 months]. Repeat for average hourly wind production (which you need to compute curtailment, anyway).</p>
+<p>Finally, assume there is a pumped hydro storage system with 5 MWh of storage. Whenver you have wind power in excess of demand, use the excess energy to pump water from a lower reservoir to an upper reservoir. Assume a pump efficiency of 85%. Then, when energy demand exceeds wind power, release water from the upper reservoir back down to the lower reservoir, passing through a penstock with hydroelectric turbines operating at 90% efficiency.</p>
+<p>How does this storage system effect the overall ability to utilize wind energy? What is the new capacity factor of the windfarm, given this ability to store excess energy (up to 5 MWh). Write out a simple algorithim to capture this behaviour <em>before</em> attempting to code it up in R. In other words, write it in psuedo-code using simple language and artithmetic, before worrying about syntax. Include both the psuedo-code and R code in your final report. Document any assumptions, and have fun!</p>
 </div>
 
 
