@@ -6,3 +6,4 @@
 *.RData
 *.rdb
 *.rdx
+*cache*
