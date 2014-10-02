@@ -1,7 +1,7 @@
 ---
-title: "Wind Analysis"
-author: "Sustainable Engineering Lab, Columbia University (by Elliot Cohen)"
-date: August 22 2014
+title: "Handling Real [Messy] Data"
+author: "Elliot Cohen, PhD"
+date: '2014-10-02'
 output:
   html_document:
     fig_height: 4
@@ -10,36 +10,50 @@ output:
 ---
 <link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>
 
-Use this R script to analyze wind speed and wind power data:
+# An exploration of wind energy data
+Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean. The islands already have one wind farm up and running, with 7 Vestas wind turbines (v52-850Kw) rated at 850kW each. The combined rated capacity of the 7 turbines is `r 850*7` kW, which is roughly `r round((850*7/7926.5)*100, digits=1)`% of the annual average power demand for the island! This is a huge penetration of wind! Pairwise observations of [10-minute average wind speed and cummulative wind energy production](https://github.com/Ecohen4/ECREEE/blob/master/WIND_VXE_2013_ORIGINAL.xls) data are provided by the utility for the most recent year, in .xls format (click "view raw" to download). [Hourly demand](https://github.com/Ecohen4/ECREEE/blob/master/VXE_Estimated_Hourly_Load.csv) was estimated in-house from the load profile of a nearby island, and is provided in .csv format.
 
-* import raw data from .csv  
-* check for missing values  
-* remove missing and spurious values  
-* engineering computations  
-* compute energy benchmark comparisons (e.g. kinetic energy contained in wind and Betz limit)  
-* visualize (plot) the raw data with benchmarks  
-* apply data filters based on physical knowledge of the system    
-* plot the filtered ("clean") data  
-* fit a Weibull distribution to "clean" windspeed data to characterize regional wind resource  
-* estimate power curve of installed wind turbines (observed power output vs observed windspeed)    
-* compare with manufacturers power curve   
-* calculate capacity factor (with curtailment)  
-* calculate capacity factor (without curtailment)   
-* calculate theoretical maximum capacity factor given Weibull distribution and Power Curve  
-* Predict next years energy production!  
+Using this data, prepare the following material for an investor meeting coming up next week. Be sure to document any assumptions, equations or algorithims implimented, and include all underlying R code in a well-commented [Rmarkdown](http://rmarkdown.rstudio.com/) file. [Knit](http://yihui.name/knitr/) the .rmd into a clean .html or .pdf file for review.
 
-Let's get started!
------------------------------------------
+1. Visually inspect the data! 
+    + Does it make sense? 
+    + Are there any obvious issues, such as missing data, incomplete records or suspect values?
+2. Compute summary statistics to make sure the values make sense (use benchmark comparisons!).
+3. Clean the data. There are two schools of thought on this:
+    + Option 1: Remove all records containing suspect/questionable data. For example:
+        + Can you have negative energy values?
+        + Can you produce 400kw at 0 windspeed? 
+        + If the wind and/or power data at a given timestamp are not reasonable on their own *or* do not make sense together as a pairwise observation, omit them.
+        + Use textbook knowledge of wind energy systems as one check (hint: Betz Limit!)
+        + Keep track of how many observations you remove!
+    + Option 2: Data correction, using textbook knowledge (hint: turbine power curve!).
+    + After implementing step 3 (option 1 or 2), you should have a "clean" dataset. Now make engineering computations with confidence! Proceed to steps 4-9 (and 10-11 if you're extra ambitious!)
+4. Total wind energy produced last year (e.g. KWh delivered to the grid).
+5. Capacity factor of the current system.
+6. Total wind energy that was *possible* given the observed windspeeds and the [turbine power curve](https://github.com/Ecohen4/ECREEE/blob/master/v52-850KW-power-curve.csv). This is the uncurtailed power output.
+7. Uncurtailed capacity factor using the result from 6 (this assumes the grid can accept the full uncurtailed power output). 
+8. Turbine efficiency (hint: you will have to compute the kinetic energy contained in the wind!):
+    + average efficiency for the entire windfarm; and
+    + efficiency as a function of windspeed.
+    + compare with Betz Limit.
+9. Characterization of the wind resource using a Weibull distribution.  
+10. **BONUS** Randomly generate a year's worth of new windspeed data according to the fitted Weibull distrubution. Using the new windspeeds, predict what the resulting wind energy production may look like next year.  
+11. **BONUS** Repeat step 10 500 times and compute the capacity factor each time. Boxplot the results of the 500 simulations. This is called an ensemble forecast.  
+
+****************
+## Data Cleaning
 ```{r global.options, include=FALSE}
 # load libraries
 library(knitr)
+library(rmarkdown)
 library(plyr)
 library(ggplot2)
 library(reshape2)
+library(stats)
 library(fitdistrplus)
 
 # set global options for html output
-opts_chunk$set(fig.path="figs/", echo=TRUE, cache=TRUE, fig.align="left")
+opts_chunk$set(fig.path="figs/", echo=TRUE, cache=TRUE, fig.align="center")
 
 # avoid using factors until you become more familiar with object classes
 options(stringsAsFactors=FALSE)
@@ -47,8 +61,10 @@ options(stringsAsFactors=FALSE)
 
 ### Import data from .csv
 ```{r read.data, cache=TRUE}
-getwd()
+setwd("~/github/ECREEE/")
 data<-read.csv(file="WIND_VXE_2013.csv", header=TRUE)
+# save(data, file="WIND_VXE_2013.rdata")
+# load("WIND_VXE_2013.rdata")
 ```
 
 ### Assign succint, descriptive column names
@@ -83,6 +99,7 @@ dat.raw<-data # keep all the data
 `dim` returns the dimensions of the data (rows x columns).  
 `str` returns the structure of the data (class)
 `summary` returns a statistical summary (quantiles) of the data contained in each column of the `data.frame` named "dat".
+
 ```
 dim(dat.raw)
 str(dat.raw)
@@ -110,7 +127,7 @@ check<-function(df){
 ```
 
 Similarly, we can write another quick function to show how many records are removed in any subset operation:
-```{r count.removed}
+```{r omit.count}
 removed<-function(nrow, nrow1){
   print(paste("number of records REMOVED:", nrow-nrow1, sep=" "))
   print(paste("number of records REMAINING:", nrow1, sep=" "))
@@ -118,6 +135,7 @@ removed<-function(nrow, nrow1){
 ```
 
 Now let's take our `check` function for a test drive!
+
 ```{r na.check.1}
 check(dat.raw)  # NAs present. Column-wise distribution is relatively uniform (besides wind with relatively few)
 ```
@@ -169,8 +187,8 @@ dat$uncurtailed_10min_kwh<-(uncurtailed_power)/6
 dat$curtailment_10min_kwh<-dat$uncurtailed-dat$energy_sentout_10min_kwh
 ```
 
-Check if we **introduced NA, NaN or Inf** values in our calculations:
-```{r introduced.NAs}
+### Check if we introduced any NA, NaN or Inf values
+```{r introduced.NA}
 # check for NA
 check(dat)
 
@@ -191,10 +209,29 @@ dat$turbine_eff[inf]<-0
 # double check for NA
 check(dat) # NAs have been removed.
 ```
+Up to here, we have gone through a set of basic data cleaning techniques. Can we proceed with engineering analysis at this point? Let's compute capacity factor and see what we get.
 
+### Compute capacity factor after initial data cleaning
+```{r capacity.factor.1}
+# summation of energy sentout, divided by the number of hours, yields average power sentout.
+avg.power<-sum(dat$energy_sentout_10min_kwh)/(dim(dat)[1]/6)
+
+# summation of energy sentout, divided by the number of hours*capacity, yields capacity factor.
+actual.cap.factor<-sum(dat$energy_sentout_10min_kwh)/(850*7*dim(dat)[1]/6)
+uncurtailed.cap.factor<-sum(dat$uncurtailed_10min_kwh)/(850*7*dim(dat)[1]/6)
+betz.cap.factor<-sum(dat$betz_limit_10min_kwh)/(850*7*dim(dat)[1]/6)
+
+# display the results
+data.frame(actual.cap.factor, uncurtailed.cap.factor, betz.cap.factor)
+```
+Do these values look right? Discuss.
+
+******************
+## Visual Inspection
 ### Visually inspect the data with respect to time
 First, we need to assign a timestamp to each observation.  The raw data contains charachter representations of date-time, but these are not sufficient for robust time-series analysis.
 Therefore, we must convert `date_time` into a `POSIXlt` or `POSIXct` date-time class. POSIX date-time objects represent calendar dates and times to the nearest second. At their core, POSIX objects are lists containing date-time components. We will have to convert POSIX objects back to character representations for certain operations, such as summarizing the data with the `ddply` function.
+
 ```{r POSIX}
 # To convert a character representation of date-time into a POSIX object, each entry must conform to a standard format.
 # In the raw data, midnight values are missing the hour and minute. Fix these:
@@ -265,38 +302,46 @@ ggplot(test, aes(x=day, y=value/10^3, group=variable, colour=variable, linetype=
   theme_classic() +
   scale_x_discrete(breaks=NULL)
 ```
-Clearly we have some problem data...
-
+Clearly we still have some problem data that must have survived our first round of data cleaning. 
+What more can we do? 
 
 ***********
-Data Filters
------------------------------------------
+## Data Filters
 ### Check for outliers and apply data filters
-
 First, check the wind speed data:
-```{r wind.summary}
+```{r wind.summary, results='hold'}
+# start with the data from the end of part 1, with all NAs removed.
+load("Wind_VXE_2013_NAs_Removed.rdata")
+
 # check for outliers in wind data
-# quantiles
 summary(dat$mean_wind_mps) 
 summary(dat$min_wind_mps)
 summary(dat$max_wind_mps)
 
-# historgrams
-hist(dat$mean_wind_mps, main="Histogram of Mean Windspeeds")
-hist(dat$min_wind_mps, main="Histogram of Min Windspeeds")
-hist(dat$max_wind_mps, main="Histogram of Max Windspeeds")
+# # historgrams
+# hist(dat$mean_wind_mps, main="Histogram of Mean Windspeeds")
+# hist(dat$min_wind_mps, main="Histogram of Min Windspeeds")
+# hist(dat$max_wind_mps, main="Histogram of Max Windspeeds")
+```
 
+Wind data looks OK besides the first bin. First bin is far too large. Remove records (rows) associated with windspeeds less than 0.5 mps (first bin).
+
+```{r wind.filter, fig.width=8, fig.height=6}
+# remove heavy lower tail (records with windspeed between 0-0.5mps)
+nrow<-dim(dat)[1]
 dat<-subset(dat, mean_wind_mps > 0.5)
+
+# cumulative number of records removed
+removed(nrow, dim(dat)[1])
 
 # fit a Weibull distribution to the lightly treated windspeed data
 weibull.fit<-fitdist(dat$mean_wind_mps, distr="weibull")
 summary(weibull.fit)
 plot(weibull.fit, demp=TRUE)
 ```
-Wind data looks OK besides the first bin. First bin is far too large. Remove records (rows) associated with windspeeds less than 0.5 mps (first bin).
 
 Check wind measurements with respect to time:
-```{r wind.timeseries, fig.width=9, fig.height=5}
+```{r wind.timeseries, fig.width=(8), fig.height=5}
 wind<-subset(dat, select=c("week", "mean_wind_mps", "max_wind_mps", "min_wind_mps"))
 wind<-ddply(wind, .(week), numcolwise(mean))
 
@@ -309,46 +354,49 @@ ggplot(test, aes(x=week, y=value, group=variable, colour=variable, linetype=vari
   theme_classic() +
   scale_x_discrete(breaks=levels(test$week)[seq(1,360, by=30)], labels=abbreviate)
 ```
+Now the windspeed data looks good! The mean value is bounded by the min and max in all cases, as we should expect.
 
-
-Next, check the energy sentout data. We can apply varying levels of stringency in filtering the data:
+Next, check the energy sentout data. We can apply increasing levels of stringency when filtering the data:
 ```{r energy.filter, echo=TRUE}
 # check for outliers in the energy data
 summary(dat$energy_sentout_10min_kwh) # quantiles
 hist(dat$energy_sentout_10min_kwh)    # histogram
 # looks funny...
 
-# number of records (rows) before filtering
+# number of records before filtering based on energy criteria
 nrow<-dim(dat)[1] 
 
+## FILTERS ENUMERATED IN ORDER OF INCREASING STRINGENCY ##
 # FILTER 1: remove negative energy values
 dat<-subset(dat, dat$energy_sentout_10min_kwh >= 0) #
 
-# number of records removed
-nrow2<-dim(dat)[1]
-removed(nrow, nrow2)
+# cumulative number of records removed
+removed(nrow, dim(dat)[1])
 
-# Filter positive energy values based on physical knowledge of the system. 
-# Filters enumerated in order of increasing stringency:
 # FILTER 2: remove energy values beyond what's possible given installed capacity
 capacity<-850*7 # 850 KW rated capacity x 7 turbines
 capacity_10min_kwh<-capacity*(10/60) # max energy sentout in 10 minutes
 dat<-subset(dat, dat$energy_sentout_10min_kwh <= capacity_10min_kwh)
+
+# cumulative number of records removed
+removed(nrow, dim(dat)[1])
 
 # # FILTER 3: remove statistical outliers: set quantiles to keep
 # range<-quantile(dat$energy_sentout_10min_kwh, probs=c(0.01,0.99))
 # dat<-subset(dat, dat$energy_sentout_10min_kwh > range[1])
 # dat<-subset(dat, dat$energy_sentout_10min_kwh < range[2])
 
-# # FILTER 4: remove energy values beyond what's possible given windspeed (e.g. kinetic energy contained in wind)
-# dat<-subset(dat, dat$energy_sentout_10min_kwh <= dat$wind_energy_10min_kwh)
- 
-# # FILTER 5: remove energy values beyond what's possible given windspeed AND Betz limit (kinetic energy *16/27)
-# dat<-subset(dat, dat$energy_sentout_10min_kwh <= dat$betz_limit_10min_kwh)
+# FILTER 4: remove energy values beyond what's possible given windspeed (e.g. kinetic energy contained in wind)
+dat<-subset(dat, dat$energy_sentout_10min_kwh <= dat$wind_energy_10min_kwh)
 
-# number of records removed
-nrow3<-dim(dat)[1]
-removed(nrow2, nrow3)
+# cumulative number of records removed
+removed(nrow, dim(dat)[1])
+
+# FILTER 5: remove energy values beyond what's possible given windspeed AND Betz limit (kinetic energy *16/27)
+dat<-subset(dat, dat$energy_sentout_10min_kwh <= dat$betz_limit_10min_kwh)
+
+# cumulative number of records removed
+removed(nrow, dim(dat)[1])
 
 # check the quantiles and histogram again
 summary(dat$energy_sentout_10min_kwh)
@@ -357,15 +405,26 @@ hist(dat$energy_sentout_10min_kwh)
 Now the summary statistics look more reasonable.   
 
 Let's see what the data looks like now with respect to time.
-```{r filtered.energy.timeseries, fig.width=9, fig.height=5}
+```{r filtered.energy.timeseries, fig.width=10, fig.height=5}
 # Total energy, per week
-energy<-subset(dat, select=c("week", "energy_sentout_10min_kwh", "uncurtailed_10min_kwh", "curtailment_10min_kwh", "betz_limit_10min_kwh"))
+energy<-subset(dat, select=c("week", "energy_sentout_10min_kwh", "uncurtailed_10min_kwh", "betz_limit_10min_kwh", "wind_energy_10min_kwh"))
 energy<-ddply(energy, .(week), numcolwise(sum))
 
 # plot energy vs time
 test<-melt(energy, id.vars=("week"))
-ggplot(test, aes(x=week, y=value/10^3, group=variable, colour=variable, linetype=variable)) +
-  geom_line() +
+# test$variable <- factor(test$variable, levels = c("energy_sentout_10min_kwh", "uncurtailed_10min_kwh",  "betz_limit_10min_kwh", "wind_energy_10min_kwh"))
+
+# # line plot
+# ggplot(test, aes(x=week, y=value/10^3, group=variable, colour=variable, linetype=variable)) +
+#   geom_line() +
+#   scale_y_continuous(name="MWh per week") + 
+#   labs(title="Energy Timeseries") +
+#   theme_classic() +
+#   scale_x_discrete(breaks=levels(test$week)[seq(1,52, by=8)], labels=abbreviate)
+
+# area plot
+ggplot(test, aes(x=week, y=value/10^3, group=variable, fill=variable)) + 
+  geom_area(stat = "identity", position = "stack") +
   scale_y_continuous(name="MWh per week") + 
   labs(title="Energy Timeseries") +
   theme_classic() +
@@ -377,8 +436,8 @@ Now we are able to see temporal trends in the energy sentout (curtailed), energy
 Now let's check if the windspeed and energy measurements make sense together (e.g. pairwise observations).  
 Recall this is timeseries data, so at every timestamp there is a windspeed and energy measurement.
 
-### Plot the power curve with benchmark comparisons
-```{r benchmark.plot, fig.width=9, fig.height=5, warning=FALSE}
+```{r benchmark.plot, fig.width=8, fig.height=5, warning=FALSE}
+# Plot the power curve with benchmark comparisons
 energy<-subset(dat, select=c("mean_wind_mps", "energy_sentout_10min_kwh", "wind_energy_10min_kwh", "betz_limit_10min_kwh"))
 energy<-melt(energy, id.vars=("mean_wind_mps"))
 ggplot(energy, aes(x=mean_wind_mps, y=value, group=variable, colour=variable)) + 
@@ -390,9 +449,7 @@ ggplot(energy, aes(x=mean_wind_mps, y=value, group=variable, colour=variable)) +
 ```
 Windspeed vs power output looks good if we filter the data using the Betz Limit.  Otherwise we see observations above the Betz limit, but we know this is not possible. How could have so much power been produced at such low wind speeds? The only (likely) explanation is that the wind measurements are off. If the wind gauge (anemometer) was reading too low, then it would artificially place points to the left of the true power curve, thus creating points above the Betz Limit.
 
-Here we are able to apply knowledge of the physical system to improve data filtering. 
-
-We can add more filters, as necessary.
+Here we are able to apply knowledge of the physical system to improve data filtering. We can add more filters, as necessary.
 
 ### Turbine setpoints
 We know that the turbines shutdown at windspeeds below 3mps and above 25mps. We have two options for applying this information:
@@ -401,18 +458,18 @@ We know that the turbines shutdown at windspeeds below 3mps and above 25mps. We 
 * Con: Weibull distribution and capacity factor will be skewed uprwards because observations at low windspeeds have been removed.  
 
 The following code is not run, but shown as an example of how to filter the data with respect to turbine setpoints.
-```{r wind.filter}
+```{r setpoint.filter}
 dat<-subset(dat, dat$min_wind_mps > 3)
 dat<-subset(dat, dat$max_wind_mps < 25)
 ```
 
-```{r filtered.benchmark.plot, ref.label="benchmark.plot",fig.width=9, fig.height=5, warning=FALSE, eval=TRUE}
+```{r filtered.benchmark.plot, ref.label="benchmark.plot", fig.width=8, fig.height=5, warning=FALSE, eval=TRUE}
 ```
 
 Save the "clean" wind data (post-filter)
 ```{r write.csv}
-write.csv(dat, file="filtered_VXE_wind_speed.csv")
-save(dat, file="filtered_VXE_wind_speed.rdata")
+write.csv(dat, file="filtered_VXE_wind_speed.csv") # for export as .csv
+save(dat, file="filtered_VXE_wind_speed.rdata") # for re-use in R
 ```
 
 Alternatively, we could apply this filter instead:
@@ -439,7 +496,7 @@ plot(weibull.fit.physics.filter, demp=TRUE)
 ```
 
 ### Compute the capacity factor (actual and potential) based on the filtered data
-```{r capacity.factor}
+```{r capacity.factor.2}
 # summation of energy sentout, divided by the number of hours, yields average power sentout.
 avg.power<-sum(dat$energy_sentout_10min_kwh)/(dim(dat)[1]/6)
 
@@ -451,21 +508,18 @@ betz.cap.factor<-sum(dat$betz_limit_10min_kwh)/(850*7*dim(dat)[1]/6)
 # display the results
 data.frame(actual.cap.factor, uncurtailed.cap.factor, betz.cap.factor)
 ```
-
+What does it mean if the capacity factor according to the betz limit exceeds unity?
+It means that, at times, the energy contained in the wind that could theoretically be extracted given a perfect turbine exceeds the rated capacity of the turbines. This can happen when the wind resource exceeds the design point of the turbines.
 
 ***********
-Data Correction
---------------------------------------------
+## Data Correction
 Above we demonstrated several ways to filter the data based on physics of the system and known system constraints. This type of data filtering is excellent for removing **random** missing, erroneous or outlier data.  However, what if we have reason to believe the wind measurements are systematicaly too low? How can we address a systematic bias in the data? One way is to apply a correction algorithim.
 
 ### Windspeed correction algorithim
 Assume the energy sentout measurements are correct, and that all the error is contained in the windspeed measurements.  This may be a good assumption since the energy data can be confirmed at other points in the electricity system (e.g. at the bus bar, by the utility or dispatch center, etc...).  Now, assuming the load measurements are correct, then we can back out the minimum windspeed needed to produce that much power.  We then re-assign the calculated minimum windspeed to observations with imfeasible wind speeds measurements.  Conceptually, we are correcting inaccurate windspeed measurements by shifting them to the right (to the power curve).
 
 To demonstrate **data correction**, we start from [nearly] the beginning, with only the missing values removed:
-```{r start.fresh, echo=FALSE, results='hide'}
-# # load the raw data
-# dat<-dat.raw
-
+```{r start.fresh, echo=TRUE, results='hide'}
 # load the the data after removing NAs, but prior to applying any filters.
 load("Wind_VXE_2013_NAs_Removed.rdata")
 ```
@@ -496,8 +550,7 @@ for(i in 1:dim(range)[2]){
 }
 
 # number of records removed
-nrow2<-dim(dat)[1]
-removed(nrow, nrow2)
+removed(nrow, dim(dat)[1])
 ```
 
 ### Fit a Weibull distribution to statistically-filtered windspeed data
@@ -561,15 +614,10 @@ weibull.fit.corrected<-fitdist(dat$corrected_wind_mps, "weibull")
 summary(weibull.fit.corrected)
 
 # and compare with the weibull distribution fit to the lightly-treated, physics-filtered, statistically filtered, and corrected windspeed data, respectively.
-denscomp(weibull.fit, addlegend=FALSE, main="Histogram and Weibull fit to lightly-treated windspeed data")
-denscomp(weibull.fit.physics.filter, addlegend=FALSE, main="Histogram and Weibull fit to physics-filtered windspeed data")
-denscomp(weibull.fit.stat.filter, addlegend=FALSE, main="Histogram and Weibull fit to statistically-filtered windspeed data")
-denscomp(weibull.fit.corrected, addlegend=FALSE, main="Histogram and Weibull fit to statistically-filtered & corrected windspeed data")
-
-# plot(weibull.fit, demp=TRUE, main="Weibull fit to lightly treated windspeed data")
-# plot(weibull.fit.physics.filter, demp=TRUE, main="Weibull fit to physics-based filtered windspeed data")
-# plot(weibull.fit.stat.filter, demp=TRUE, main="Weibull fit to statistically filtered windspeed data")
-# plot(weibull.fit.corrected, demp=TRUE, main="Weibull fit to statistically filtered & corrected windspeed data")
+denscomp(weibull.fit, addlegend=FALSE, main="Weibull fit to lightly-treated windspeeds")
+denscomp(weibull.fit.physics.filter, addlegend=FALSE, main="Weibull fit to physics-filtered windspeeds")
+denscomp(weibull.fit.stat.filter, addlegend=FALSE, main="Weibull fit to statistically-filtered windspeeds")
+denscomp(weibull.fit.corrected, addlegend=FALSE, main="Weibull fit to statistically-filtered & corrected windspeeds")
 ```
 
 ### Put it all together: manufacturer's power curve, uncurtailed power curve (with corrected windspeed) and curtailed power curve (with corrected windspeed).
@@ -593,6 +641,7 @@ Since we have continuous data, we need to bin the data into discrete segments fi
   + since we have lots of data, we can use small bins.
   
 (The following code chunk is not run, but we provide it for future use.)
+
 ```
 range<-range(dat$corrected_wind_mps)
 bins<-seq(range[1], range[2], by=0.5)
@@ -630,7 +679,7 @@ legend("bottomright", legend=c("Estimated Power Curve (w. windspeed correction)"
 ```
 
 ### Re-compute capacity factor with windspeed correction
-```{r capacity.factor.2}
+```{r capacity.factor.3}
 # summation of energy sentout, divided by the number of hours, yields average power sentout.
 avg.power<-sum(dat$energy_sentout_10min_kwh)/(dim(dat)[1]/6)
 
@@ -667,10 +716,10 @@ par(mfrow=c(1,1))
 I believe we are seeing a sharp decrease in curtailment on the weekends. Notice the periodicity in the daily figure. The curtailment fluctuates between 200-300 kWh/10min averaged throughout the day for five days per week, and then plummets to less than 100 kWh/10 min (average) on the  6th and 7th day.  Is this a result of increased demand on the weekends or decreased scheduling of baseload? Either could explain a sharp decrease in curtailment (e.g. less "excess" power).
 
 **********
-Prediction
---------------------------------------
-### Fit a local-polynomial power curve model
+## Prediction
+### Fit a continuous function to a discrete power curve
 Now that we have characterized windspeeds for this region (Weibull distribution) and estimated the power curve (power output given a windspeed), we can sample from the Weibull distribution to generate new wind data and compute the expected power output.  To make the power curve a continuous function (rather than discrete), we fit a polynomial function to it. *Local* polynomial estimation techniques (e.g. k-nearest neigbor and kernel density) offer advantages to to global fits.  In local estimation techniques, fitting is performed within small neighborhoods, resulting in improved goodness of fit with a lower polynomial order. The concept is similar to a moving average, and smoothing splines. Here we fit two local polynomial models, one to the observations, and a second to the manufacturers power curve.  Choosing one or the other is a matter of preference and philosophy (do you trust the turbines to work precisely to the manufacturer specifications, or do you trust your own measurements?)
+
 ```{r local.polynomial.model, eval=TRUE, message=FALSE}
 library(locfit)
 
@@ -699,14 +748,15 @@ expected.gen.empirical<-predict(empirical.mod, newdata=expected.wind)
 expected.gen.manufacturer<-predict(manufacturer.mod, newdata=expected.wind)
 
 # calculate the expected (uncurtailed) capacity factor for next year:
-sum(expected.gen.empirical)/(850*7*8760)
-sum(expected.gen.manufacturer)/(850*7*8760)
+cf.simulation.uncurtailed.epc<-sum(expected.gen.empirical)/(850*7*8760)
+cf.simulation.uncurtailed.mpc<-sum(expected.gen.manufacturer)/(850*7*8760)
 
 # plot the new (expected) power curve
 plot(expected.gen.empirical ~ expected.wind, col="blue", ylim=c(0, 850*7/6), xlim=c(0,20), pch=20, main="Comparing Two Prediction Techniques", ylab="Expected Gen. (kWh/10min)", xlab="Expected Wind (mps)")
 points(y=expected.gen.manufacturer, x=expected.wind, col="red", pch=20)
 legend("topleft", legend=c("Fit to Empirical Data", "Fit to Manufacturer's Power Curve"), col=c("blue", "red"), pch=c(20,20))
 ```
+
 ### Probabilistic Forecast
 The expected power output of a wind farm is given by the integral of power output over a range of windspeeds (defined according to the turbine manufacturer's power curve), multiplied by the probability of occurance of each windspeed (according to the fitted Weibull distribution). In practice, this may be approximated by a Reimann Sum: discretizing windspeed into intervals, computing the probability of winspeed within each interval, and taking the sum. 
 
@@ -714,19 +764,19 @@ It follows that to compute the expected capacity factor, simply divide the expec
 
 To characterize variability in the expected power output, we compute the variance.  Variance is given by the expectation of power output (x) minus the expected power output (xbar), quauntity squared. Similarly, variability in the expected capacity factor, is simply a constant times the variance of power output.
 
-```{r p.forecast}
-# discretize windspeed range
+```{r expectation}
+# discrete windspeed range
 wind<-seq(0,24, by=0.1)
 
 # vector of power output given a vector of windspeeds, according to the power curve
 power.epc<-predict(empirical.mod, newdata=wind)
 power.mpc<-predict(manufacturer.mod, newdata=wind)
 
-# compute the probability of each windspeed according to the fitted weibull distribution
+# probability of windspeeds according to the fitted weibull distribution
 pdf<-dweibull(x=wind, shape=weibull.fit$estimate[1], scale=weibull.fit$estimate[2])
 # cdf<-pweibull(q=wind, shape=weibull.fit.stat.filter$estimate[1], scale=weibull.fit.stat.filter$estimate[2])
 
-# expectation of power output
+# expectated value of power output
 expected.power.mpc<-sum(pdf*power.mpc) #kw
 expected.power.epc<-sum(pdf*power.epc) #kw
 
@@ -743,11 +793,25 @@ list(expectation=expected.power.epc, variance=var.epc, standard.deviation=sd.epc
 c<-850*7 #kw
 
 # capacity factor
-cf.mpc<-expected.power.mpc/c
-cf.epc<-expected.power.epc/c
-list(capacity.factor.mpc=round(cf.mpc, digits=2), capacity.factor.epc=round(cf.epc, digits=2))
+cf.expectation.uncurtailed.mpc<-expected.power.mpc/c
+cf.expectation.uncurtailed.epc<-expected.power.epc/c
+
+# compare uncurtailed capacity factor estimates from two techniques (simulation, expectation), and for two power curves (empricial and manufacturer)
+
+# Simulation | Expectation 
+# ----------------------------- | -----------------------------
+# cf.simulation.uncurtailed.mpc | cf.expectation.uncurtailed.mpc
+# cf.simulation.uncurtailed.epc | cf.expectation.uncurtailed.epc
+
+cf<-data.frame(technique=c(rep("simulation",2), rep("expectation", 2)), 
+               power.curve=c("manufacturer", "empirical", "manufacturer", "empirical"), 
+               capacity.factor=c(cf.simulation.uncurtailed.mpc, cf.simulation.uncurtailed.epc, cf.expectation.uncurtailed.mpc, cf.expectation.uncurtailed.epc))
+
+kable(cf)
 ```
 
+********
+## Bonus
 ### Stochastic Ensemble Forecast
 To model windspeed for a given location, we fit a Weibull distribution to the observed data and then re-sample the fitted distribution to generate new realizations with the same distirubtional properties as the observed data.  Because every observation is a random realization from some underlying process, then it follows that any prediction based on the fitted distribution is similarly a random realization of the same underlying process.  Thus model predictions are probabilistic, not deterministic, and should be subject to probabalistic treatment.  Thefore, to "predict" next year's capacity factor, we will generate 500 simulations of probabilistic outcomes to better capture the range of likely outcomes.
 ```{r ensemble_forecast, cache=TRUE, eval=FALSE, include=FALSE}
@@ -816,7 +880,7 @@ dmelt2<-melt(daily2, id.vars="day")
 dmelt<-merge(dmelt1, dmelt2, by="day")
 ```
 
-```{r energy.timeseries.2, fig.width=9, fig.height=5, include=FALSE}
+```{r energy.timeseries.2, fig.width=9, fig.height=5, eval=FALSE, include=FALSE}
 # # Now we can create time-series visualizations of the data:
 # # summarize
 # daily.gen.sim.mpc<-ddply(gen.sim.mpc, .(day), numcolwise(sum))
@@ -847,7 +911,6 @@ dmelt<-merge(dmelt1, dmelt2, by="day")
 #   theme_classic() +
 #   scale_x_discrete(breaks=NULL)
 ```
-
 
 ```{r, eval=FALSE, include=FALSE}
 # # # boxplot the hourly observations
