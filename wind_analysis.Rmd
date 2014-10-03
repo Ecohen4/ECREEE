@@ -8,7 +8,6 @@ output:
     theme: readable
     toc: yes
 ---
-<link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>
 
 # An exploration of wind energy data
 Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean. The islands already have one wind farm up and running, with 7 Vestas wind turbines (v52-850Kw) rated at 850kW each. The combined rated capacity of the 7 turbines is `r 850*7` kW, which is roughly `r round((850*7/7926.5)*100, digits=1)`% of the annual average power demand for the island! This is a huge penetration of wind! Pairwise observations of [10-minute average wind speed and cummulative wind energy production](https://github.com/Ecohen4/ECREEE/blob/master/WIND_VXE_2013_ORIGINAL.xls) data are provided by the utility for the most recent year, in .xls format (click "view raw" to download). [Hourly demand](https://github.com/Ecohen4/ECREEE/blob/master/VXE_Estimated_Hourly_Load.csv) was estimated in-house from the load profile of a nearby island, and is provided in .csv format.
@@ -53,7 +52,7 @@ library(stats)
 library(fitdistrplus)
 
 # set global options for html output
-opts_chunk$set(fig.path="figs/", echo=TRUE, cache=TRUE, fig.align="center")
+opts_chunk$set(fig.path="figs/", echo=TRUE, cache=TRUE, tidy=TRUE, fig.align="center")
 
 # avoid using factors until you become more familiar with object classes
 options(stringsAsFactors=FALSE)
@@ -216,13 +215,13 @@ Up to here, we have gone through a set of basic data cleaning techniques. Can we
 # summation of energy sentout, divided by the number of hours, yields average power sentout.
 avg.power<-sum(dat$energy_sentout_10min_kwh)/(dim(dat)[1]/6)
 
-# summation of energy sentout, divided by the number of hours*capacity, yields capacity factor.
-actual.cap.factor<-sum(dat$energy_sentout_10min_kwh)/(850*7*dim(dat)[1]/6)
-uncurtailed.cap.factor<-sum(dat$uncurtailed_10min_kwh)/(850*7*dim(dat)[1]/6)
-betz.cap.factor<-sum(dat$betz_limit_10min_kwh)/(850*7*dim(dat)[1]/6)
+# summation of energy sentout, divided by the number of (hours*capacity), yields capacity factor.
+cf.curtailed.initial<-sum(dat$energy_sentout_10min_kwh)/(850*7*dim(dat)[1]/6)
+cf.uncurtailed.initial<-sum(dat$uncurtailed_10min_kwh)/(850*7*dim(dat)[1]/6)
+cf.betz.initial<-sum(dat$betz_limit_10min_kwh)/(850*7*dim(dat)[1]/6)
 
 # display the results
-data.frame(actual.cap.factor, uncurtailed.cap.factor, betz.cap.factor)
+data.frame(cf.curtailed.initial, cf.uncurtailed.initial, cf.betz.initial)
 ```
 Do these values look right? Discuss.
 
@@ -301,6 +300,19 @@ ggplot(test, aes(x=day, y=value/10^3, group=variable, colour=variable, linetype=
   labs(title="Monthwise Energy Timeseries") +
   theme_classic() +
   scale_x_discrete(breaks=NULL)
+```
+
+... and bi-variate plots...
+```{r benchmark.plot.1, fig.width=8, fig.height=5, warning=FALSE}
+# Plot the power curve with benchmark comparisons
+energy<-subset(dat, select=c("mean_wind_mps", "energy_sentout_10min_kwh", "wind_energy_10min_kwh", "betz_limit_10min_kwh"))
+energy<-melt(energy, id.vars=("mean_wind_mps"))
+ggplot(energy, aes(x=mean_wind_mps, y=value, group=variable, colour=variable)) + 
+  geom_point() +
+  scale_y_continuous(name="KWh in 10min", limit=c(quantile(dat$energy_sentout_10min_kwh, probs=c(0.01,0.999) ) ) ) + 
+  scale_x_continuous(name="Windspeed (mps)") + 
+  labs(title="Pairwise Observations\nw. Comparison to Betz Limit and Kinetic Energy in the Wind") +
+  theme_classic()
 ```
 Clearly we still have some problem data that must have survived our first round of data cleaning. 
 What more can we do? 
@@ -444,7 +456,7 @@ ggplot(energy, aes(x=mean_wind_mps, y=value, group=variable, colour=variable)) +
   geom_point() +
   scale_y_continuous(name="KWh in 10min", limit=c(0, max(dat$energy_sentout_10min_kwh))) + 
   scale_x_continuous(name="Windspeed (mps)") + 
-  labs(title="Empirical Power Curve with Betz Limit and Theoretical Wind Energy") +
+  labs(title="Empirical Power Curve w. Comparison to Betz Limit and Kinetic Wind Energy") +
   theme_classic()
 ```
 Windspeed vs power output looks good if we filter the data using the Betz Limit.  Otherwise we see observations above the Betz limit, but we know this is not possible. How could have so much power been produced at such low wind speeds? The only (likely) explanation is that the wind measurements are off. If the wind gauge (anemometer) was reading too low, then it would artificially place points to the left of the true power curve, thus creating points above the Betz Limit.
@@ -458,12 +470,12 @@ We know that the turbines shutdown at windspeeds below 3mps and above 25mps. We 
 * Con: Weibull distribution and capacity factor will be skewed uprwards because observations at low windspeeds have been removed.  
 
 The following code is not run, but shown as an example of how to filter the data with respect to turbine setpoints.
-```{r setpoint.filter}
+```{setpoint.filter}
 dat<-subset(dat, dat$min_wind_mps > 3)
 dat<-subset(dat, dat$max_wind_mps < 25)
 ```
 
-```{r filtered.benchmark.plot, ref.label="benchmark.plot", fig.width=8, fig.height=5, warning=FALSE, eval=TRUE}
+```{r filtered.benchmark.plot, ref.label="benchmark.plot", fig.width=8, fig.height=5, warning=FALSE, eval=FALSE}
 ```
 
 Save the "clean" wind data (post-filter)
@@ -501,12 +513,12 @@ plot(weibull.fit.physics.filter, demp=TRUE)
 avg.power<-sum(dat$energy_sentout_10min_kwh)/(dim(dat)[1]/6)
 
 # summation of energy sentout, divided by the number of hours*capacity, yields capacity factor.
-actual.cap.factor<-sum(dat$energy_sentout_10min_kwh)/(850*7*dim(dat)[1]/6)
-uncurtailed.cap.factor<-sum(dat$uncurtailed_10min_kwh)/(850*7*dim(dat)[1]/6)
-betz.cap.factor<-sum(dat$betz_limit_10min_kwh)/(850*7*dim(dat)[1]/6)
+cf.curtailed.filtered<-sum(dat$energy_sentout_10min_kwh)/(850*7*dim(dat)[1]/6)
+cf.uncurtailed.filtered<-sum(dat$uncurtailed_10min_kwh)/(850*7*dim(dat)[1]/6)
+cf.betz.filtered<-sum(dat$betz_limit_10min_kwh)/(850*7*dim(dat)[1]/6)
 
 # display the results
-data.frame(actual.cap.factor, uncurtailed.cap.factor, betz.cap.factor)
+data.frame(cf.curtailed.filtered, cf.uncurtailed.filtered, cf.betz.filtered)
 ```
 What does it mean if the capacity factor according to the betz limit exceeds unity?
 It means that, at times, the energy contained in the wind that could theoretically be extracted given a perfect turbine exceeds the rated capacity of the turbines. This can happen when the wind resource exceeds the design point of the turbines.
@@ -578,10 +590,26 @@ MPC$design_sentout_10min_kwh<-MPC$power_kW*7/6 # kW x (7 turbines) x (1/6 hour)
 MPC<-subset(MPC, windspeed_mps<25)
 
 # plot the manufacturers power curve
-plot(x=MPC$windspeed_mps, y=MPC$design_sentout_10min_kwh, type="p", pch=4, main="Manufacturers Power Curve\n with Empirical Overlay", xlab="Windspeed (mps)", ylab="Energy (kWh/10min)", xlim=range(dat$mean_wind_mps))
-points(y=dat$energy_sentout_10min_kwh, x=dat$mean_wind_mps, col="green", cex=0.1, pch=20)
-points(y=dat$uncurtailed_10min_kwh, x=dat$mean_wind_mps, col="red", cex=0.1, pch=20)
-legend("bottomright", col=c("black", "green", "red"), pch=c(4, 20, 20), legend=c("Manufacturers Power Curve", "Energy Sentout (Curtailed)","Energy Possible (Uncurtailed)") )
+plot(x=MPC$windspeed_mps, 
+     y=MPC$design_sentout_10min_kwh, 
+     type="p", 
+     pch=4, 
+     main="Manufacturers Power Curve\n with Empirical Overlay", 
+     xlab="Windspeed (mps)", 
+     ylab="Energy (kWh/10min)", 
+     xlim=range(dat$mean_wind_mps)
+     )
+points(y=dat$energy_sentout_10min_kwh, 
+       x=dat$mean_wind_mps, 
+       col="green", cex=0.1, pch=20)
+points(y=dat$uncurtailed_10min_kwh, 
+       x=dat$mean_wind_mps, 
+       col="red", cex=0.1, pch=20)
+legend("bottomright", 
+       col=c("black", "green", "red"), 
+       pch=c(4, 20, 20), 
+       legend=c("Manufacturers Power Curve", "Energy Sentout (Curtailed)","Energy Possible (Uncurtailed)")
+       )
 
 # For each observation, supply the energy sentout (kWh), find the closest matching value on the power curve (kW), query the corresponding wind speed from the power curve (mps). This becomes the corrected windspeed. Apply this whenever the measured windspeed is less than the windspeed dictated by the power curve. This shifts all points that were left of the power curve, onto the power curve.
 
@@ -618,10 +646,20 @@ denscomp(weibull.fit, addlegend=FALSE, main="Weibull fit to lightly-treated wind
 denscomp(weibull.fit.physics.filter, addlegend=FALSE, main="Weibull fit to physics-filtered windspeeds")
 denscomp(weibull.fit.stat.filter, addlegend=FALSE, main="Weibull fit to statistically-filtered windspeeds")
 denscomp(weibull.fit.corrected, addlegend=FALSE, main="Weibull fit to statistically-filtered & corrected windspeeds")
+
+# and compare the estimate shape and scale factor
+weibull.parameters <- data.frame(treatment=c("lightly-treated", "physics-filtered", "statistically-filtered", "statistically-filtered & corrected"),
+                                 shape=c(weibull.fit$estimate[1], weibull.fit.physics.filter$estimate[1], weibull.fit.stat.filter$estimate[1], weibull.fit.corrected$estimate[1]), 
+                                 scale=c(weibull.fit$estimate[2], weibull.fit.physics.filter$estimate[2], weibull.fit.stat.filter$estimate[2], weibull.fit.corrected$estimate[2]))
+
+# sensitivity of Weibull parameter estimation based on data treatment:
+print(weibull.parameters, digits=2)
+
+# dotchart(x=as.matrix(weibull.parameters[,-1]), labels=weibull.parameters[,1])
 ```
 
 ### Put it all together: manufacturer's power curve, uncurtailed power curve (with corrected windspeed) and curtailed power curve (with corrected windspeed).
-```{r MPC.v.EPC, fig.width=8, fig.height=6}
+```{r MPC.v.cpc, fig.width=8, fig.height=6}
 plot(x=MPC$windspeed_mps, y=MPC$design_sentout_10min_kwh, type="p", pch=4, main="Manufacturers Power Curve\n with Corrected Empirical Overlay", xlab="Windspeed (mps)", ylab="Energy (kWh/10min)", xlim=c(0,20))
 points(y=dat$energy_sentout_10min_kwh, x=dat$corrected_wind_mps, col="green", cex=0.1, pch=20)
 points(y=dat$uncurtailed_10min_kwh, x=dat$corrected_wind_mps, col="red", cex=0.1, pch=20)
@@ -684,10 +722,10 @@ legend("bottomright", legend=c("Estimated Power Curve (w. windspeed correction)"
 avg.power<-sum(dat$energy_sentout_10min_kwh)/(dim(dat)[1]/6)
 
 # summation of energy sentout, divided by the number of hours*capacity, yields capacity factor.
-curtailed.cap.factor<-sum(dat$energy_sentout_10min_kwh)/(850*7*dim(dat)[1]/6)
-uncurtailed.cap.factor<-sum(dat$uncurtailed_10min_kwh)/(850*7*dim(dat)[1]/6)
-betz.cap.factor<-sum(dat$betz_limit_10min_kwh)/(850*7*dim(dat)[1]/6)
-data.frame(curtailed.cap.factor, uncurtailed.cap.factor, betz.cap.factor)
+cf.curtailed.corrected<-sum(dat$energy_sentout_10min_kwh)/(850*7*dim(dat)[1]/6)
+cf.uncurtailed.corrected<-sum(dat$uncurtailed_10min_kwh)/(850*7*dim(dat)[1]/6)
+cf.betz.corrected<-sum(dat$betz_limit_10min_kwh)/(850*7*dim(dat)[1]/6)
+data.frame(cf.curtailed.corrected, cf.uncurtailed.corrected, cf.betz.corrected)
 ```
 
 ### Temporal aggregation and smoothing
@@ -724,10 +762,10 @@ Now that we have characterized windspeeds for this region (Weibull distribution)
 library(locfit)
 
 # Option 1: Fit a local-polynomial model to the observed data
-empirical.mod<-locfit(energy_sentout_10min_kwh ~ mean_wind_mps, data=dat)
-summary(empirical.mod)
-plot(empirical.mod, main="Model Fit to Empirical Data")
-points(y=dat$energy_sentout_10min_kwh, x=dat$mean_wind_mps, cex=0.1, pch=20, col="red")
+corrected.mod<-locfit(energy_sentout_10min_kwh ~ corrected_wind_mps, data=dat)
+summary(corrected.mod)
+plot(corrected.mod, main="Model Fit to corrected Data")
+points(y=dat$energy_sentout_10min_kwh, x=dat$corrected_wind_mps, cex=0.1, pch=20, col="red")
 
 # Option 2: Fit a local-polynomial model to the manufacturer power curve
 manufacturer.mod<-locfit(design_sentout_10min_kwh ~ windspeed_mps, data=MPC)
@@ -741,20 +779,20 @@ legend("bottomright", legend=c("Manufacturer's Power Curve", "Local Polynomial M
 Now we can predict energy generation given a probabilistic (Weibull) distribution of windspeeds and the fitted power curve model (local polynomial).
 ```{r predict}
 # Use a Weibull distribution to randomly generate one-year of 10-minute average windspeeds using the same shape and scale factor as the observed windspeeds
-expected.wind=rweibull(8760*6, shape=weibull.fit.stat.filter$estimate[1], scale=weibull.fit.stat.filter$estimate[2])
+wind.sim=rweibull(8760*6, shape=weibull.fit.corrected$estimate[1], scale=weibull.fit.corrected$estimate[2])
 
 # estimate generation given expected windspeeds
-expected.gen.empirical<-predict(empirical.mod, newdata=expected.wind)
-expected.gen.manufacturer<-predict(manufacturer.mod, newdata=expected.wind)
+expected.gen.corrected<-predict(corrected.mod, newdata=wind.sim)
+expected.gen.manufacturer<-predict(manufacturer.mod, newdata=wind.sim)
 
 # calculate the expected (uncurtailed) capacity factor for next year:
-cf.simulation.uncurtailed.epc<-sum(expected.gen.empirical)/(850*7*8760)
-cf.simulation.uncurtailed.mpc<-sum(expected.gen.manufacturer)/(850*7*8760)
+cf.uncurtailed.simulation.cpc<-sum(expected.gen.corrected)/(850*7*8760)
+cf.uncurtailed.simulation.mpc<-sum(expected.gen.manufacturer)/(850*7*8760)
 
 # plot the new (expected) power curve
-plot(expected.gen.empirical ~ expected.wind, col="blue", ylim=c(0, 850*7/6), xlim=c(0,20), pch=20, main="Comparing Two Prediction Techniques", ylab="Expected Gen. (kWh/10min)", xlab="Expected Wind (mps)")
-points(y=expected.gen.manufacturer, x=expected.wind, col="red", pch=20)
-legend("topleft", legend=c("Fit to Empirical Data", "Fit to Manufacturer's Power Curve"), col=c("blue", "red"), pch=c(20,20))
+plot(expected.gen.corrected ~ wind.sim, col="blue", ylim=c(0, 850*7/6), xlim=c(0,20), pch=20, main="Comparing Two Prediction Techniques", ylab="Expected Gen. (kWh/10min)", xlab="Expected Wind (mps)")
+points(y=expected.gen.manufacturer, x=wind.sim, col="red", pch=20)
+legend("topleft", legend=c("Fit to corrected Data", "Fit to Manufacturer's Power Curve"), col=c("blue", "red"), pch=c(20,20))
 ```
 
 ### Probabilistic Forecast
@@ -769,7 +807,7 @@ To characterize variability in the expected power output, we compute the varianc
 wind<-seq(0,24, by=0.1)
 
 # vector of power output given a vector of windspeeds, according to the power curve
-power.epc<-predict(empirical.mod, newdata=wind)
+power.cpc<-predict(corrected.mod, newdata=wind)
 power.mpc<-predict(manufacturer.mod, newdata=wind)
 
 # probability of windspeeds according to the fitted weibull distribution
@@ -778,155 +816,43 @@ pdf<-dweibull(x=wind, shape=weibull.fit$estimate[1], scale=weibull.fit$estimate[
 
 # expectated value of power output
 expected.power.mpc<-sum(pdf*power.mpc) #kw
-expected.power.epc<-sum(pdf*power.epc) #kw
+expected.power.cpc<-sum(pdf*power.cpc) #kw
 
 # variance of power output
 var.mpc<-sum(pdf*(power.mpc-expected.power.mpc)^2)
 sd.mpc<-var.mpc^(1/2)
 list(expectation=expected.power.mpc, variance=var.mpc, standard.deviation=sd.mpc)
 
-var.epc<-sum(pdf*(power.epc-expected.power.epc)^2)
-sd.epc<-var.epc^(1/2)
-list(expectation=expected.power.epc, variance=var.epc, standard.deviation=sd.epc)
+var.cpc<-sum(pdf*(power.cpc-expected.power.cpc)^2)
+sd.cpc<-var.cpc^(1/2)
+list(expectation=expected.power.cpc, variance=var.cpc, standard.deviation=sd.cpc)
 
 # installed capacity
 c<-850*7 #kw
 
 # capacity factor
-cf.expectation.uncurtailed.mpc<-expected.power.mpc/c
-cf.expectation.uncurtailed.epc<-expected.power.epc/c
-
-# compare uncurtailed capacity factor estimates from two techniques (simulation, expectation), and for two power curves (empricial and manufacturer)
-
-# Simulation | Expectation 
-# ----------------------------- | -----------------------------
-# cf.simulation.uncurtailed.mpc | cf.expectation.uncurtailed.mpc
-# cf.simulation.uncurtailed.epc | cf.expectation.uncurtailed.epc
-
-cf<-data.frame(technique=c(rep("simulation",2), rep("expectation", 2)), 
-               power.curve=c("manufacturer", "empirical", "manufacturer", "empirical"), 
-               capacity.factor=c(cf.simulation.uncurtailed.mpc, cf.simulation.uncurtailed.epc, cf.expectation.uncurtailed.mpc, cf.expectation.uncurtailed.epc))
-
-kable(cf)
+cf.uncurtailed.expectation.mpc<-expected.power.mpc/c
+cf.uncurtailed.expectation.cpc<-expected.power.cpc/c
 ```
 
-********
-## Bonus
-### Stochastic Ensemble Forecast
-To model windspeed for a given location, we fit a Weibull distribution to the observed data and then re-sample the fitted distribution to generate new realizations with the same distirubtional properties as the observed data.  Because every observation is a random realization from some underlying process, then it follows that any prediction based on the fitted distribution is similarly a random realization of the same underlying process.  Thus model predictions are probabilistic, not deterministic, and should be subject to probabalistic treatment.  Thefore, to "predict" next year's capacity factor, we will generate 500 simulations of probabilistic outcomes to better capture the range of likely outcomes.
-```{r ensemble_forecast, cache=TRUE, eval=FALSE, include=FALSE}
-windspeeds<-array(data=0, dim=c(500, 8760*6)) # blank array of winspeeds
-gen.sim.mpc<-array(data=0, dim=c(500, 8760*6)) # blank array of energy output given windspeeds and the manufacturer's power curve (mpc)
-gen.sim.epc<-array(data=0, dim=c(500, 8760*6)) # blank array of energy output given windspeeds and the empirical power curve (epc)
+Compare curtailed and uncurtailed capacity factor estimates from various data treatments.
+```{r cf.compare, fig.width=8}
+cf.values <- as.vector(c(cf.curtailed.initial, cf.uncurtailed.initial, cf.curtailed.filtered, cf.uncurtailed.filtered, cf.curtailed.corrected, cf.uncurtailed.corrected, cf.uncurtailed.simulation.mpc, cf.uncurtailed.simulation.cpc, cf.uncurtailed.expectation.mpc, cf.uncurtailed.expectation.cpc))
 
-# populate the arrays with 500 simulated time series.
-for (i in 1:500) {
-  # Use a Weibull distribution to randomly generate one-year of 10-minute average windspeeds using the same shape and scale factor as the observed windspeeds
-  windspeeds[i, ]<-rweibull(8760*6, shape=weibull.fit.stat.filter$estimate[1], scale=weibull.fit.stat.filter$estimate[2])
-  
-  # predict generation given new windspeeds using two different power curves
-  gen.sim.mpc[i, ]<-predict(manufacturer.mod, newdata=windspeeds[i, ])
-  gen.sim.epc[i, ]<-predict(empirical.mod, newdata=windspeeds[i, ])
-  }    # end for-loop.
+cf<-data.frame(Variable=c(rep(c("Curtailed", "Uncurtailed"), 3), rep("Uncurtailed" ,4)), 
+               Treatment=c(rep("Omit NA", 2), rep("Omit NA and Windspeed Filter", 2), rep("Omit NA and Windspeed Correction", 2), rep("Windspeed Simulation", 2), rep("Windspeed Expectation", 2)), 
+               Data.Source=c(rep("Observed Data Only", 4), rep("Observed Windspeed w. MPC", 2), rep(c("Weibull Distribution w. MPC", "Weibull Distribution w. CPC"), 2)), 
+               Capacity.Factor=cf.values)
 
-# organize and label simulation output
-# initially, rows represent simulations (500), columns represent timesteps (10min)
-# transpose such that rows are time, and columns are simulations
-gen.sim.mpc<-t(gen.sim.mpc)
-gen.sim.epc<-t(gen.sim.epc)
+# print(cf, digits=3)
+kable(cf, digits=3)
 
-gen.sim.mpc<-as.data.frame(gen.sim.mpc)
-gen.sim.epc<-as.data.frame(gen.sim.epc)
-
-# create time series vector in ten-minute increments from 2013-01-01 to 2013-12-31
-time<-seq(ISOdate(2013,1,1), to=ISOdate(2014,01,01), by=60*10)
-gen.sim.mpc$POSIXct<-time[1:dim(gen.sim.mpc)[1]]
-gen.sim.epc$POSIXct<-time[1:dim(gen.sim.epc)[1]]
-```
-
-Using the POSIX object, we can easily group the data with respect to time (e.g. by month, day, hour). This will come in handy for temporal aggregation, and for plotting:
-```{r cut.2, eval=FALSE, include=FALSE}
-month <- cut(gen.sim.mpc$POSIXct, breaks = "month")
-week <- cut(gen.sim.mpc$POSIXct, breaks = "week")
-day <- cut(gen.sim.mpc$POSIXct, breaks = "day")
-hour <- cut(gen.sim.mpc$POSIXct, breaks = "hour")
-
-dummy<-strsplit(as.character(week), split=" ")
-week<-laply(dummy, '[[', 1) # keep the date, drop the time
-
-dummy<-strsplit(as.character(day), split=" ")
-day<-laply(dummy, '[[', 1) # keep the date, drop the time
-
-dummy<-strsplit(as.character(hour), split=" ")
-hour<-laply(dummy, '[[', 2) # keep the time, drop the date
-
-gen.sim.mpc$hour<-as.factor(hour)
-gen.sim.epc$hour<-as.factor(hour)
-gen.sim.mpc$day<-as.factor(day)
-gen.sim.epc$day<-as.factor(day)
-gen.sim.mpc$week<-as.factor(week)
-gen.sim.epc$week<-as.factor(week)
-gen.sim.mpc$month<-as.factor(month)
-gen.sim.epc$month<-as.factor(month)
-```
-
-```{r reshape, eval=FALSE, include=FALSE}
-daily1<-ddply(gen.sim.mpc, .(day), numcolwise(sum))
-daily2<-ddply(gen.sim.epc, .(day), numcolwise(sum))
-
-# melt
-dmelt1<-melt(daily1, id.vars="day")
-dmelt2<-melt(daily2, id.vars="day")
-dmelt<-merge(dmelt1, dmelt2, by="day")
-```
-
-```{r energy.timeseries.2, fig.width=9, fig.height=5, eval=FALSE, include=FALSE}
-# # Now we can create time-series visualizations of the data:
-# # summarize
-# daily.gen.sim.mpc<-ddply(gen.sim.mpc, .(day), numcolwise(sum))
-# dat<-melt(daily.gen.sim.mpc, id.vars="day")
-# 
-# # plot energy vs time
-# test<-melt(energy, id.vars=("day"))
-# ggplot(test, aes(x=day, y=value/10^3, group=variable, colour=variable, linetype=variable)) +
-#   geom_line() +
-#   scale_y_continuous(name="MWh per day") + 
-#   labs(title="Energy Timeseries") +
-#   theme_classic() +
-#   scale_x_discrete(breaks=test$day[seq(1, 360, by=60)], labels=abbreviate)
-# 
-# # facet wrap by month
-# energy<-subset(gen.sim.mpc, select=c("day","week", "month", "energy_sentout_10min_kwh", "wind_energy_10min_kwh", "betz_limit_10min_kwh", "uncurtailed_10min_kwh", "curtailment_10min_kwh"))
-# energy<-ddply(energy, .(day, week, month), numcolwise(sum))
-# 
-# # plot energy vs time
-# test<-melt(energy, id.vars=c("day", "week", "month"))
-# levels(test$month) <- month.name[1:12]
-# 
-# ggplot(test, aes(x=day, y=value/10^3, group=variable, colour=variable, linetype=variable)) +
-#   geom_line() +
-#   facet_wrap(~month, scales="free") +
-#   scale_y_continuous(name="MWh per day") + 
-#   labs(title="Monthwise Energy Timeseries") +
-#   theme_classic() +
-#   scale_x_discrete(breaks=NULL)
-```
-
-```{r, eval=FALSE, include=FALSE}
-# # # boxplot the hourly observations
-# # colnames(gen.mpc)<-seq(ISOdate(2012,1,1), to=ISOdate(2013,1,1), by=60*10)
-# # test<-t(gen.mpc) # hours are rows, columns are simulations
-# # colnames(gen.mpc)<-"hours"
-# # boxplot(test ~ hours)
-# # 
-# compute annual generation from the hourly estimated generation.
-ann.gen.mpc<-apply(gen.sim.mpc, 1, sum)
-ann.gen.epc<-apply(gen.sim.epc, 1, sum)
-ann.gen<-cbind(ann.gen.mpc, ann.gen.epc)
-
-# compute capacity factor in each year
-cf<-ann.gen/(850*7*8760)
-
-# show the range of estimates for capacity factor given the ensemble forecast
-boxplot(cf, main="Capacity Factor Simulation", sub="Winspeed randomly sampled from a Weibull Distribution\nPower estimated from Manufacturer and Empirical Power Curves", ylab="Capacity Factor", ylim=c(0,1), names=c("manufacturer", "empirical"))
+dotchart(x=cf$Capacity.Factor, xlim=c(0,1),
+         labels=cf$Treatment,
+         groups=factor(cf$Variable),
+         gcolor="black",
+         main="Sensitivity of Capacity Factor\nto Data Treatment",
+         xlab="Capacity Factor",
+         xaxs="i"
+         )
 ```
