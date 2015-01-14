@@ -1,9 +1,10 @@
-.Rproj.user
-.Rhistory
-.RData
-.rdx
-.rdb
+*.Rproj.user
+*.Rhistory
+*.RData
+*.rdx
+*.rdb
 *.RData
 *.rdb
 *.rdx
 *cache*
+*.png
