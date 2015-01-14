@@ -60,10 +60,8 @@ options(stringsAsFactors=FALSE)
 
 ### Import data from .csv
 ```{r read.data, cache=TRUE}
-setwd("~/github/ECREEE/")
-data<-read.csv(file="WIND_VXE_2013.csv", header=TRUE)
-# save(data, file="WIND_VXE_2013.rdata")
-# load("WIND_VXE_2013.rdata")
+setwd("~/Dropbox/ecreeeTraining/cape_verde_data") # Everyone!
+data<-read.csv(file="WIND_VXE_2013_Original.csv", header=TRUE)
 ```
 
 ### Assign succint, descriptive column names
@@ -76,6 +74,10 @@ cbind(names(data), new.names)
 
 # if yes, replace column names with new names
 names(data)<-new.names
+
+# save a copy with the new names
+save(data, file="WIND_VXE_2013.rdata")
+# load("WIND_VXE_2013.rdata")
 ```
 
 ### Subset data by type 
@@ -126,11 +128,22 @@ check<-function(df){
 ```
 
 Similarly, we can write another quick function to show how many records are removed in any subset operation:
-```{r omit.count}
+```{r na.count}
 removed<-function(nrow, nrow1){
   print(paste("number of records REMOVED:", nrow-nrow1, sep=" "))
   print(paste("number of records REMAINING:", nrow1, sep=" "))
 }
+```
+
+We can also can write a function to recode 999 values as NAs.
+```{r recode.999s}
+recode.999s <- function(df){
+  # check for 999.90 values (NA code)
+  na_code <- which(df[,]==999.90 | df[,]==999.00, arr.ind=TRUE)
+  print(paste("How many 999.9s Fixed?:", dim(na_code)[1]))
+  df[na_code] <- NA # assign NA to 999.90 values
+  return(df)
+  }
 ```
 
 Now let's take our `check` function for a test drive!
@@ -187,7 +200,7 @@ dat$curtailment_10min_kwh<-dat$uncurtailed-dat$energy_sentout_10min_kwh
 ```
 
 ### Check if we introduced any NA, NaN or Inf values
-```{r introduced.NA}
+```{r nas.introduced}
 # check for NA
 check(dat)
 
@@ -231,7 +244,7 @@ Do these values look right? Discuss.
 First, we need to assign a timestamp to each observation.  The raw data contains charachter representations of date-time, but these are not sufficient for robust time-series analysis.
 Therefore, we must convert `date_time` into a `POSIXlt` or `POSIXct` date-time class. POSIX date-time objects represent calendar dates and times to the nearest second. At their core, POSIX objects are lists containing date-time components. We will have to convert POSIX objects back to character representations for certain operations, such as summarizing the data with the `ddply` function.
 
-```{r POSIX}
+```{r POSIX.format}
 # To convert a character representation of date-time into a POSIX object, each entry must conform to a standard format.
 # In the raw data, midnight values are missing the hour and minute. Fix these:
 get<-which(is.na(as.POSIXlt(dat$date_time, format="%m/%d/%y %H:%M"))) # return row index of date_time that cannot be coerced to POSIX object
@@ -246,7 +259,7 @@ dat$date_time<-as.POSIXlt(dat$date_time, format="%m/%d/%y %H:%M")
 Success!
 
 Using the POSIX object, we can easily group the data with respect to time (e.g. by month, day, hour). This will come in handy for temporal aggregation, and for plotting:
-```{r cut}
+```{r cut.date}
 dat$month <- cut(dat$date_time, breaks = "month")
 week <- cut(dat$date_time, breaks = "week")
 day <- cut(dat$date_time, breaks = "day")
@@ -302,6 +315,13 @@ ggplot(test, aes(x=day, y=value/10^3, group=variable, colour=variable, linetype=
   scale_x_discrete(breaks=NULL)
 ```
 
+
+```{r 1week}
+try <- subset(dat, date_time > as.POSIXlt("2013-06-01 00:00:00") & date_time < as.POSIXlt("2013-06-07 00:00:00"))
+ggplot(try, aes(x=date_time, y=uncurtailed_10min_kwh, colour = "uncurtailed")) + geom_line() +
+  geom_line(aes(x=date_time, y=energy_sentout_10min_kwh, colour = "curtailed"))
+```
+
 ... and bi-variate plots...
 ```{r benchmark.plot.1, fig.width=8, fig.height=5, warning=FALSE}
 # Plot the power curve with benchmark comparisons
@@ -331,9 +351,9 @@ summary(dat$min_wind_mps)
 summary(dat$max_wind_mps)
 
 # # historgrams
-# hist(dat$mean_wind_mps, main="Histogram of Mean Windspeeds")
-# hist(dat$min_wind_mps, main="Histogram of Min Windspeeds")
-# hist(dat$max_wind_mps, main="Histogram of Max Windspeeds")
+hist(dat$mean_wind_mps, main="Histogram of Mean Windspeeds")
+hist(dat$min_wind_mps, main="Histogram of Min Windspeeds")
+hist(dat$max_wind_mps, main="Histogram of Max Windspeeds")
 ```
 
 Wind data looks OK besides the first bin. First bin is far too large. Remove records (rows) associated with windspeeds less than 0.5 mps (first bin).
@@ -356,15 +376,15 @@ Check wind measurements with respect to time:
 ```{r wind.timeseries, fig.width=(8), fig.height=5}
 wind<-subset(dat, select=c("week", "mean_wind_mps", "max_wind_mps", "min_wind_mps"))
 wind<-ddply(wind, .(week), numcolwise(mean))
+wind$week.number <- as.integer(strftime(x=levels(test$week), format="%W"))
 
 # plot wind vs time
-test<-melt(wind, id.vars=("week"))
-ggplot(test, aes(x=week, y=value, group=variable, colour=variable, linetype=variable)) +
+test<-melt(wind, id.vars=c("week", "week.number"))
+ggplot(test, aes(x=week.number, y=value, group=variable, colour=variable, linetype=variable)) +
   geom_line() +
   scale_y_continuous(name="Windspeed [m/s]") + 
   labs(title="Wind Timeseries") +
-  theme_classic() +
-  scale_x_discrete(breaks=levels(test$week)[seq(1,360, by=30)], labels=abbreviate)
+  theme_bw()
 ```
 Now the windspeed data looks good! The mean value is bounded by the min and max in all cases, as we should expect.
 
@@ -442,7 +462,9 @@ ggplot(test, aes(x=week, y=value/10^3, group=variable, fill=variable)) +
   theme_classic() +
   scale_x_discrete(breaks=levels(test$week)[seq(1,52, by=8)], labels=abbreviate)
 ```
-Now we are able to see temporal trends in the energy sentout (curtailed), energy possible (uncurtailed) and the difference (curtailment). We juxtopose the Betz limit (theoretical max) as a benchmark comparison.
+Now we are able to see temporal trends in the actual energy sentout (curtailed), energy possible (uncurtailed) and the difference (curtailment). We juxtopose the Betz limit (theoretical max) and the kinetic energy of the wind as benchmark comparisons.
+
+Note that the area under the `uncurtailed_10min_kwh` curve, and above the `energy_sentout_10min_kwh` curve is the annual excess wind energy that can be stored, assuming infinite storage capacity, no charging/discharging losses. and no leakages.
 
 ### Pairwise observations: Power vs Windspeed
 Now let's check if the windspeed and energy measurements make sense together (e.g. pairwise observations).  
@@ -488,7 +510,7 @@ Alternatively, we could apply this filter instead:
 **Option 2**: When windspeed < 3 mps or > 25 mps, set power to zero (rather than removing the records altogether as in Option 1).  
 * Pro: Capacity factor will be more accurate because we have retained observations at low windspeeds.
 * Con: Fitting a Weibull distribution is more difficult because a large number of windspeed observations are forced to zero, creating an artifically heavy lower tail.  
-```
+```{ set.point.filter}
 filter<-which(dat$mean_wind_mps < 3 | dat$mean_wind_mps > 25)
 dat$energy_sentout_10min_kwh[filter]<-0
 ```
@@ -525,19 +547,26 @@ It means that, at times, the energy contained in the wind that could theoretical
 
 ***********
 ## Data Correction
-Above we demonstrated several ways to filter the data based on physics of the system and known system constraints. This type of data filtering is excellent for removing **random** missing, erroneous or outlier data.  However, what if we have reason to believe the wind measurements are systematicaly too low? How can we address a systematic bias in the data? One way is to apply a correction algorithim.
+Above we demonstrated several ways to filter the data based on the physics of the system and known system constraints. This approach is excellent for removing outliers and *random* measurement errors.  But what about *systematic* measurement errors?  What if we have reason to believe the wind measurements are systematicaly too low? How can we address bias in the data? One way is to apply a correction algorithim.
+
+In addition to correcting systematic bias in the data, we would like to retain fidelity and avoid loss of information wherever possible.  The set of data filters applied in part 1 resulted in a loss of 12913 of 52560 observations, or nearly 25% of the data. In the following section we will try to avoid that by replacing missing or erroneous values with reasonable approximations, rather than removing them altogether. 
 
 ### Windspeed correction algorithim
 Assume the energy sentout measurements are correct, and that all the error is contained in the windspeed measurements.  This may be a good assumption since the energy data can be confirmed at other points in the electricity system (e.g. at the bus bar, by the utility or dispatch center, etc...).  Now, assuming the load measurements are correct, then we can back out the minimum windspeed needed to produce that much power.  We then re-assign the calculated minimum windspeed to observations with imfeasible wind speeds measurements.  Conceptually, we are correcting inaccurate windspeed measurements by shifting them to the right (to the power curve).
 
 To demonstrate **data correction**, we start from [nearly] the beginning, with only the missing values removed:
 ```{r start.fresh, echo=TRUE, results='hide'}
+# load the raw data
+load("WIND_VXE_2013.rdata") # df data
+
 # load the the data after removing NAs, but prior to applying any filters.
-load("Wind_VXE_2013_NAs_Removed.rdata")
+# load("Wind_VXE_2013_NAs_Removed.rdata")
 ```
 
-Now we remove statistical outliers, but do *not* apply physics-based filters (e.g Betz Limit, Turbine setpoints, etc...).
-```{r outlier.removal}
+Instead of removing outliers, let's correct them to retain a full data set [skip below].
+
+If we had wanted to *remove* statistical outliers, as opposed to correcting them, we could use the following script:
+```{outlier.removal, eval=FALSE}
 nrow<-dim(dat)[1] # number of complete records BEFORE filtering
 
 # select the numeric or integer class columns
@@ -563,6 +592,12 @@ for(i in 1:dim(range)[2]){
 
 # number of records removed
 removed(nrow, dim(dat)[1])
+```
+To fix the data, we will need to get a reasonable look at what is causing the problem in the first place
+```{r na.check.3}
+check(data) # there are almost no missing values in the windspeed measurements, and roughly 700 in each of the other columns.  Let's work with the windspeeds then!
+
+
 ```
 
 ### Fit a Weibull distribution to statistically-filtered windspeed data
