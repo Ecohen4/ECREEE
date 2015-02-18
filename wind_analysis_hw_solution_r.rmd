@@ -10,7 +10,7 @@ output:
 ---
 
 # An exploration of wind energy data
-Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean. The islands already have one wind farm up and running, with 7 Vestas wind turbines (v52-850Kw) rated at 850kW each. The combined rated capacity of the 7 turbines is `r 850*7` kW, which is roughly `r round((850*7/7926.5)*100, digits=1)`% of the annual average power demand for the island! This is a huge penetration of wind! Pairwise observations of [10-minute average wind speed and cummulative wind energy production](https://github.com/Ecohen4/ECREEE/blob/master/WIND_VXE_2013_ORIGINAL.xls) data are provided by the utility for the most recent year, in .xls format (click "view raw" to download). [Hourly demand](https://github.com/Ecohen4/ECREEE/blob/master/VXE_Estimated_Hourly_Load.csv) was estimated in-house from the load profile of a nearby island, and is provided in .csv format.
+Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean. The islands already have one wind farm up and running, with 7 Vestas wind turbines (v52-850Kw) rated at 850kW each. The combined rated capacity of the 7 turbines is `r 850*7` kW, which is roughly `r round((850*7/7926.5)*100, digits=1)`% of the annual average power demand for the island! This is a huge penetration of wind! Pairwise observations of [10-minute average wind speed and cummulative wind energy production](https://raw.githubusercontent.com/Ecohen4/ECREEE/master/WIND_VXE_2013.csv) data are provided by the utility for the most recent year, in .xls format (click "view raw" to download). [Hourly demand](https://github.com/Ecohen4/ECREEE/blob/master/VXE_Estimated_Hourly_Load.csv) was estimated in-house from the load profile of a nearby island, and is provided in .csv format.
 
 Using this data, prepare the following material for an investor meeting coming up next week. Be sure to document any assumptions, equations or algorithims implimented, and include all underlying R code in a well-commented [Rmarkdown](http://rmarkdown.rstudio.com/) file. [Knit](http://yihui.name/knitr/) the .rmd into a clean .html or .pdf file for review.
 
@@ -52,16 +52,16 @@ library(stats)
 library(fitdistrplus)
 
 # set global options for html output
-opts_chunk$set(fig.path="figs/", echo=TRUE, cache=TRUE, tidy=TRUE, fig.align="center")
+opts_chunk$set(fig.path="figs/", echo=TRUE, cache=FALSE, tidy=TRUE, fig.align="center")
 
 # avoid using factors until you become more familiar with object classes
 options(stringsAsFactors=FALSE)
 ```
 
 ### Import data from .csv
-```{r read.data, cache=TRUE}
-setwd("~/Dropbox/ecreeeTraining/cape_verde_data") # Everyone!
-data<-read.csv(file="WIND_VXE_2013_Original.csv", header=TRUE)
+```{r read.data}
+setwd("~/github/data-viz/r")
+data<-read.csv(file="WIND_VXE_2013.csv", header=TRUE)
 ```
 
 ### Assign succint, descriptive column names
@@ -245,16 +245,44 @@ First, we need to assign a timestamp to each observation.  The raw data contains
 Therefore, we must convert `date_time` into a `POSIXlt` or `POSIXct` date-time class. POSIX date-time objects represent calendar dates and times to the nearest second. At their core, POSIX objects are lists containing date-time components. We will have to convert POSIX objects back to character representations for certain operations, such as summarizing the data with the `ddply` function.
 
 ```{r POSIX.format}
+dat.copy <- dat # save a copy...
+check(dat) # starting check...
+
 # To convert a character representation of date-time into a POSIX object, each entry must conform to a standard format.
 # In the raw data, midnight values are missing the hour and minute. Fix these:
-get<-which(is.na(as.POSIXlt(dat$date_time, format="%m/%d/%y %H:%M"))) # return row index of date_time that cannot be coerced to POSIX object
+get<-which(is.na(as.POSIXct(dat$date_time, format="%m/%d/%y %H:%M"))) # return row index of date_time that cannot be coerced to POSIX object
 dat$date_time[get]<-paste(dat$date_time[get], "00:00", sep=" ") # ammend those with the missing hour:time info.
 
 # check if modified date_time character string can be coerced to POSIX without generating NA values.
-sum(is.na(as.POSIXlt(dat$date_time, format="%m/%d/%y %H:%M"))) # zero NAs
+sum(is.na(as.POSIXct(dat$date_time, format="%m/%d/%y %H:%M"))) # six NAs... fix or omit after converting.
 
 # covert modified date_time character string to POSIX
-dat$date_time<-as.POSIXlt(dat$date_time, format="%m/%d/%y %H:%M")
+dat$date_time <- as.POSIXct(dat$date_time, format="%m/%d/%y %H:%M")
+
+# check
+sum(is.na(dat$date_time))
+
+# omit
+dat <- na.omit(dat)
+
+# # fix  
+# index <- which(is.na(as.POSIXct(dat$date_time, format="%m/%d/%y %H:%M")))
+# dat[index,] # 6 funny date_time values...
+# 
+# # fix funny date_time values...
+# get <- dat[index, 1]
+# dummy<-strsplit(as.character(get), split=" ")
+# date <- laply(dummy, '[[', 1) # keep the date, drop the time
+# hour <- laply(dummy, '[[', 2) # keep the time, drop the hour
+# hour <- paste("0", hour, sep="")
+# date_hour <- as.character(paste(date, hour, sep=" "))
+# as.POSIXct(date_hour, format="%m/%d/%y %H:%M") # seems to work!
+# dat$date_time[index] <- as.POSIXct(date_hour, format="%m/%d/%y %H:%M")
+# # dat$date_time[index] <- as.character(date_hour)
+# # as.POSIXct(dat$date_time[index], format="%m/%d/%y %H:%M") # seems to work!
+
+# check again..
+check(dat)
 ```
 Success!
 
@@ -273,9 +301,10 @@ dummy<-strsplit(as.character(day), split=" ")
 day<-laply(dummy, '[[', 1) # keep the date, drop the time
 dat$day<-as.factor(day)
 
-dummy<-strsplit(as.character(hour), split=" ")
-hour<-laply(dummy, '[[', 2) # keep the time, drop the date
-dat$hour<-as.factor(hour)
+## Error in fs[[1]](x, ...) : subscript out of bounds
+# dummy<-strsplit(as.character(hour), split=" ")
+# hour<-laply(dummy, '[[', 2) # keep the time, drop the date
+# dat$hour<-as.factor(hour)
 ```
 
 Save the augemented data.frame `dat`. This reflects the full dataset after NA checks and benchmark calculations, but prior to applying filters.
@@ -291,6 +320,10 @@ energy<-ddply(energy, .(day), numcolwise(sum))
 
 # plot energy vs time
 test<-melt(energy, id.vars=("day"))
+check(test)
+test <- test[complete.cases(test), ] # remove incomplete cases
+
+
 ggplot(test, aes(x=day, y=value/10^3, group=variable, colour=variable, linetype=variable)) +
   geom_line() +
   scale_y_continuous(name="MWh per day") + 
@@ -305,6 +338,8 @@ energy<-ddply(energy, .(day, week, month), numcolwise(sum))
 # plot energy vs time
 test<-melt(energy, id.vars=c("day", "week", "month"))
 levels(test$month) <- month.name[1:12]
+check(test)
+test <- test[complete.cases(test), ] # remove incomplete cases
 
 ggplot(test, aes(x=day, y=value/10^3, group=variable, colour=variable, linetype=variable)) +
   geom_line() +
@@ -566,7 +601,7 @@ load("WIND_VXE_2013.rdata") # df data
 Instead of removing outliers, let's correct them to retain a full data set [skip below].
 
 If we had wanted to *remove* statistical outliers, as opposed to correcting them, we could use the following script:
-```{outlier.removal, eval=FALSE}
+```{r outlier.removal, eval=FALSE}
 nrow<-dim(dat)[1] # number of complete records BEFORE filtering
 
 # select the numeric or integer class columns
