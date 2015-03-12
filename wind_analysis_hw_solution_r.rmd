@@ -9,6 +9,13 @@ output:
     toc: yes
 ---
 
+***
+For use or reproduction of this material, please cite as:
+
+Cohen, Elliot J. "Wind Analysis." Joint Initiative of the ECOWAS Centre for Renewable Energy and Energy Efficiency (ECREEE), The United Nations Industrial Development Organization (UNIDO) and the Sustainable Engineering Lab (SEL). Columbia University, 22 Aug. 2014. Available online: <https://github.com/Ecohen4/ECREEE>.
+
+***
+
 # An exploration of wind energy data
 Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean. The islands already have one wind farm up and running, with 7 Vestas wind turbines (v52-850Kw) rated at 850kW each. The combined rated capacity of the 7 turbines is `r 850*7` kW, which is roughly `r round((850*7/7926.5)*100, digits=1)`% of the annual average power demand for the island! This is a huge penetration of wind! Pairwise observations of [10-minute average wind speed and cummulative wind energy production](https://raw.githubusercontent.com/Ecohen4/ECREEE/master/WIND_VXE_2013.csv) data are provided by the utility for the most recent year, in .xls format (click "view raw" to download). [Hourly demand](https://github.com/Ecohen4/ECREEE/blob/master/VXE_Estimated_Hourly_Load.csv) was estimated in-house from the load profile of a nearby island, and is provided in .csv format.
 
@@ -52,7 +59,7 @@ library(stats)
 library(fitdistrplus)
 
 # set global options for html output
-opts_chunk$set(fig.path="figs/", echo=TRUE, cache=FALSE, tidy=TRUE, fig.align="center")
+opts_chunk$set(fig.path="figs/", echo=TRUE, cache=TRUE, tidy=TRUE, fig.align="center")
 
 # avoid using factors until you become more familiar with object classes
 options(stringsAsFactors=FALSE)
