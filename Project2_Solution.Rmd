@@ -1,0 +1,504 @@
+
+---
+title: "Wind Power Project"
+author: "By Elliot Cohen, Mike Waite, Joe Woo and Vijay Modi"
+date: "October 20, 2014"
+output: html_document
+---
+
+# Part 1: An exploration of wind energy data
+Suppose you are hired as a consultant to evaluate the potential for wind energy production on a small chain of islands in the Atlantic Ocean. The islands already have one wind farm up and running, with 7 Vestas wind turbines (v52-850Kw) rated at 850kW each. The combined rated capacity of the 7 turbines is `r 850*7` kW, which is roughly `r round((850*7/7926.5)*100, digits=1)`% of the annual average power demand for the island! This is a huge penetration of wind! Pairwise observations of [10-minute average wind speed and cummulative wind energy production](https://github.com/Ecohen4/ECREEE/blob/master/WIND_VXE_2013_ORIGINAL.xls) data are provided by the utility for the most recent year, in .xls format (click "view raw" to download). [Hourly demand](https://github.com/Ecohen4/ECREEE/blob/master/VXE_Estimated_Hourly_Load.csv) was estimated in-house from the load profile of a nearby island, and is provided in .csv format.
+
+Using this data, prepare the following material for an investor meeting coming up next week. Be sure to document any assumptions, equations or algorithims implimented, and include all underlying R code in a well-commented [Rmarkdown](http://rmarkdown.rstudio.com/) file. [Knit](http://yihui.name/knitr/) the .rmd into a clean .html or .pdf file for review.
+
+1. Visually inspect the data! 
+    + Does it make sense? 
+    + Are there any obvious issues, such as missing data, incomplete records or suspect values?
+2. Compute summary statistics to make sure the values make sense (use benchmark comparisons!).
+3. Clean the data. There are two schools of thought on this:
+    + Option 1: Remove all records containing suspect/questionable data. For example:
+        + Can you have negative energy values?
+        + Can you produce 400kw at 0 windspeed? 
+        + If the wind and/or power data at a given timestamp are not reasonable on their own *or* do not make sense together as a pairwise observation, omit them.
+        + Use textbook knowledge of wind energy systems as one check (hint: Betz Limit!)
+        + Keep track of how many observations you remove!
+    + Option 2: Data correction, using textbook knowledge (hint: turbine power curve!).
+    + After implementing step 3 (option 1 or 2), you should have a "clean" dataset. Now make engineering computations with confidence! Proceed to steps 4-9 (and 10-11 if you're extra ambitious!)
+4. Total wind energy produced last year (e.g. KWh delivered to the grid).
+5. Capacity factor of the current system.
+6. Total wind energy that was *possible* given the observed windspeeds and the [turbine power curve](https://github.com/Ecohen4/ECREEE/blob/master/v52-850KW-power-curve.csv). This is the uncurtailed power output.
+7. Uncurtailed capacity factor using the result from 6 (this assumes the grid can accept the full uncurtailed power output). 
+8. Turbine efficiency (hint: you will have to compute the kinetic energy contained in the wind!):
+    + average efficiency for the entire windfarm; and
+    + efficiency as a function of windspeed.
+    + compare with Betz Limit.
+9. Characterization of the wind resource using a Weibull distribution.  
+10. **BONUS** Randomly generate a year's worth of new windspeed data according to the fitted Weibull distrubution. Using the new windspeeds, predict what the resulting wind energy production may look like next year.  
+11. **BONUS** Repeat step 10 500 times and compute the capacity factor each time. Boxplot the results of the 500 simulations. This is called an ensemble forecast.  
+
+****************
+## First Things First
+```{r global.options, include=FALSE}
+# load libraries
+## The following function will load the packages required for this tutorial.  If a package cannot be found in your instance of Rstudio, it will automatically be insalled.
+## require() returns (invisibly) a logical indicating whether the required package is available.
+
+# if (!require(rgdal)) install.packages('rgdal')
+load_install<-function(lib){
+  if(! require(lib, character.only=TRUE)) install.packages(lib) 
+  library(lib, character.only=TRUE, quietly=TRUE)
+}
+
+## the required libraries (e.g. packages)
+Thelib<-c("knitr", "rmarkdown", "plyr", "ggplot2", "scales", "reshape2", "stats", "fitdistrplus", "lubridate")
+
+## apply the function
+lapply(Thelib, load_install)
+
+# set global options for html output
+opts_chunk$set(fig.path="figs/", echo=TRUE, cache=TRUE, tidy=TRUE, fig.align="center")
+
+# avoid using factors until you become more familiar with object classes
+options(stringsAsFactors=FALSE)
+```
+
+## Data Cleaning
+
+### Import data from .csv
+```{r read.data, cache=TRUE}
+setwd("~/github/ECREEE")
+data.raw<-read.csv(file="WIND_VXE_2013_original.csv", header=TRUE)
+```
+
+### Assign succint, descriptive column names
+```{r column.names, results='hide'}
+# assign new column names to be more succint (avoid spaces, use _ or . to seperate words)
+new.names<-c("date_time","T1_Possible_Power","T2_Possible_Power","T3_Possible_Power","T4_Possible_Power","T5_Possible_Power","T6_Possible_Power","T7_Possible_Power","T1_Total_Active_Power","T2_Total_Active_Power","T3_Total_Active_Power","T4_Total_Active_Power","T5_Total_Active_Power","T6_Total_Active_Power","T7_Total_Active_Power","mean_wind_mps", "min_wind_mps", "max_wind_mps", "cum_energy_delivered_kwh")
+
+# make sure the new names lineup properly with the ones they're replacing...
+cbind(names(data.raw), new.names)
+
+# if yes, replace column names with new names
+names(data.raw)<-new.names
+
+# Let's create a data frame that we'll work on as we go, so that we can always come back and reference the raw data if we'd like to
+data <- data.raw
+```
+
+### Format timestamp
+```{r}
+# Use "UTC" to avoid daylight savings
+data$date_time <- as.POSIXct(data$date_time,format="%m/%d/%y %H:%M",tz="UTC")
+```
+
+### Energy Delivered
+We know our energy data is coming in as a cumulative meter. We can check this with a time series plot.
+```{r echo=FALSE}
+plot(data$date_time[-is.na(data$cum_energy_delivered_kwh)],data$cum_energy_delivered_kwh[-is.na(data$cum_energy_delivered_kwh)],xlab="",ylab="Energy Meter (kWh)")
+```
+
+```{r}
+# Calculate energy delivered at each time step
+data$energy_delivered_kwh <- c(data$cum_energy_delivered_kwh[2:nrow(data)]-data$cum_energy_delivered_kwh[1:(nrow(data)-1)],0)
+# We know negative values with this approach will be the actual value minus 10^7
+data$energy_delivered_kwh <- ifelse(data$energy_delivered_kwh < 0,data$energy_delivered_kwh+10^7,data$energy_delivered_kwh)
+```
+
+### Check for missing values
+We can check for NAs and other things we don't particularly like as we go, but to make it quicker later, let's write a custom function that easily conveys information regarding missing values.  It wraps several useful checks into a single function:
+```{r na.check}
+check<-function(df){
+  # count NA (missing values)
+  NAs<-sum(is.na(df))
+  print(paste("Missing Values:", NAs))
+  
+  # count incomplete records (rows containing missing values)
+  ok<-complete.cases(df)
+  print(paste("Incomplete Records:", sum(! ok)))
+  
+  # Show incomplete records (if less than 100 NAs). 
+  if(NAs > 0 & NAs <= 100) print( df[which(! complete.cases(df)), ] )
+  
+  # If more than 100, show column-wise distribution of NAs.
+  if (NAs > 100) hist(which(is.na(df), arr.ind=TRUE)[,2], xlab="Column", freq=TRUE, breaks=1:dim(df)[2], main="Column-wise distribution of missing values")
+  }
+```
+
+Similarly, we can write another quick function to show how many records are removed in any subset operation:
+```{r omit.count}
+removed<-function(nrow, nrow1){
+  print(paste("number of records REMOVED:", nrow-nrow1, sep=" "))
+  print(paste("number of records REMAINING:", nrow1, sep=" "))
+}
+```
+
+Now let's take our `check` function for a test drive!
+
+```{r na.check.1}
+check(data)  # NAs present. Column-wise distribution is relatively uniform (besides wind with relatively few)
+summary(data)
+```
+
+### Remove missing values
+Apply the `na.omit` function {stats package} to create a new dataframe called `dat` with all NAs removed.  
+Apply the `removed` function {user defined} to compare the two data frames.
+```{r na.omit}
+nrow.orig<-nrow(data)[1] # record the dimensions of the data (before removing anything!)
+data<-na.omit(data) # omit rows containing missing values
+nrow.new<-dim(data)[1] # record the new dimensions of the data (after removing NAs)
+removed(nrow.orig, nrow.new) # check how many records have been removed
+summary(data)
+```
+
+### Pairwise observations: Power vs Windspeed
+Now let's check if the windspeed and energy measurements make sense together (e.g. pairwise observations).  
+Recall this is timeseries data, so at every timestamp there is a windspeed and energy measurement.
+
+```{r benchmark.plot, fig.width=8, fig.height=5, warning=FALSE}
+# Plot the wind farm power curve with benchmark comparisons
+ggplot(data, aes(x=mean_wind_mps), colour=variable) + 
+  geom_point(aes(y=energy_delivered_kwh, color="Energy Delivered")) +
+  scale_y_continuous(name="Energy Delivered (KWh in 10min intervals)", limit=c(0, max(data$energy_delivered_kwh))) + 
+  scale_x_continuous(name="Windspeed (mps)", limit=c(0, max(data$mean_wind_mps)))  +
+    labs(title="Empirical Power Curve") + 
+    theme_classic() +
+    theme(legend.position="")
+```
+
+### Overlay Energy Benchmarks: Kinetic energy in the wind, Betz limit and Turbine Power Curve
+
+``` {r}
+# compute kinetic energy in the wind at each windspeed
+# Wind Power = (1/2)*rho*area*(velocity)^3 = [kg/m^3]*[m^2]*[m/s]^3 = [kg*m^2/s^3] = [kg*m^2/s^2][1/s] = [Newton-meter]/[second] = [Joules/second] = [Watts]
+turbine.rating <- 850
+rho <- 1.225 # density of wind (kg/m^3)
+area <- 2124 # sweep area of wind turbines (m^2)
+n.turbines <- 7 # number of turbines
+data$wind_power_kw<-(1/2)*rho*area*(data$mean_wind_mps)^3*n.turbines/1000 # kW avg power
+data$wind_energy_10min_kwh<-data$wind_power_kw*(10/60) # kWh in 10 min
+
+# compute betz limit
+betz.coef<- 16/27
+data$betz_limit_10min_kwh<-data$wind_energy_10min_kwh*betz.coef
+
+# Turbine Power Curve
+power.curve <- read.csv("v52-850KW-power-curve.csv")
+# Keep power curve only for wind speeds below cut out speed (25 m/s)
+power.curve <- power.curve[which(power.curve$windspeed_mps<=25),]
+power.curve$energy_10min_kwh <- power.curve$power_kW*(10/60)*n.turbines
+splinefun.power.curve <- splinefun(power.curve$windspeed_mps,power.curve$energy_10min_kwh)
+data$power_curve_10min_kwh <- splinefun.power.curve(data$mean_wind_mps)
+# Enrsure now power curve values are below zero or above maximum
+data$power_curve_10min_kwh[which(data$power_curve_10min_kwh<0)] <- 0
+data$power_curve_10min_kwh[which(data$power_curve_10min_kwh>turbine.rating*(10/60)*n.turbines)] <- turbine.rating*(10/60)*n.turbines
+```
+
+``` {r echo=FALSE}
+# Add benchmarks to empirical power curve plot
+ggplot(data, aes(x=mean_wind_mps)) + 
+  geom_point(aes(y=energy_delivered_kwh, color="Energy Delivered")) +
+    geom_line(aes(y=wind_energy_10min_kwh, color="Total Wind Energy")) +
+    geom_line(aes(y=betz_limit_10min_kwh, color="Betz Limit")) +
+    geom_line(aes(y=power_curve_10min_kwh, color="Power Curve")) +
+  scale_y_continuous(name="Energy Delivered (KWh in 10min intervals)", limit=c(0, max(data$energy_delivered_kwh))) + 
+  scale_x_continuous(name="Windspeed (mps)", limit=c(0, max(data$mean_wind_mps)))  +
+    labs(title="Empirical Power Curve") + 
+    theme_classic() +
+    theme(legend.position="bottom",legend.title=element_blank())
+```
+
+***********
+## 3. Clean the data
+Assume the energy delivered measurements are correct, and that all the error is contained in the windspeed measurements.  
+
+### Option 1: Remove all records containing suspect/questionable data
+
+```{r}
+# Remove all data points to the left of the power curve
+data.opt1 <- data[which(data$energy_delivered_kwh<=data$power_curve_10min_kwh),]
+nrow.orig <- nrow(data)
+nrow.new <- nrow(data.opt1)
+removed(nrow.orig, nrow.new) # check how many records have been removed (a lot)
+```
+
+``` {r echo=FALSE}
+# Plot data.opt1 and power curve
+ggplot(data.opt1, aes(x=mean_wind_mps)) + 
+  geom_point(aes(y=energy_delivered_kwh, color="Energy Delivered")) +
+    geom_line(aes(y=power_curve_10min_kwh, color="Power Curve")) +
+  scale_y_continuous(name="Energy Delivered (KWh in 10min intervals)", limit=c(0, max(data.opt1$energy_delivered_kwh))) + 
+  scale_x_continuous(name="Windspeed (mps)", limit=c(0, max(data.opt1$mean_wind_mps)))  +
+    labs(title="Empirical Power Curve - Data Cleaning Option 1") + 
+    theme_classic() +
+    theme(legend.position="bottom",legend.title=element_blank())
+```
+
+### Option 2: Move wind speeds to the left of the power curve to the power curve values
+```{r}
+data.opt2 <- data
+# Sort power curve in ascending order of electricity generated
+power.curve.sorted <- power.curve[order(power.curve$energy_10min_kwh),]
+# Calculate the "projected" wind speed from the power curve for each entry's energy delivered
+data.opt2$wind_mps_projected <- power.curve.sorted$windspeed_mps[findInterval(x=data.opt2$energy_delivered_kwh, vec=power.curve.sorted$energy_10min_kwh, all.inside=TRUE, rightmost.closed=TRUE)]
+# Choose the greater of the wind speed data value and the projected wind speed as the corrected wind speed
+# Do not move values off 0 kWh
+data.opt2$wind_mps_corrected <- ifelse(data.opt2$energy_delivered_kwh==0,data.opt2$mean_wind_mps,pmax(data.opt2$mean_wind_mps,data.opt2$wind_mps_projected))
+# Recalculate power curve values corresponding to corrected wind speeds in data frame
+data.opt2$corrected_power_curve_10min_kwh <- splinefun.power.curve(data.opt2$wind_mps_corrected)
+data.opt2$corrected_power_curve_10min_kwh[which(data.opt2$corrected_power_curve_10min_kwh<0)] <- 0
+# Recalculate total wind energy
+data.opt2$corrected_wind_energy_10min_kwh <- ((1/2)*rho*area*(data.opt2$wind_mps_corrected)^3*n.turbines/1000)*(10/60)
+```
+
+``` {r echo=FALSE}
+# Plot data.opt2 and power curve
+ggplot(data.opt2, aes(x=wind_mps_corrected)) + 
+  geom_point(aes(y=energy_delivered_kwh, color="Energy Delivered")) +
+    geom_line(aes(y=corrected_power_curve_10min_kwh, color="Power Curve")) +
+  scale_y_continuous(name="Energy Delivered (KWh in 10min intervals)", limit=c(0, max(data.opt2$energy_delivered_kwh))) + 
+  scale_x_continuous(name="Corrected Windspeed (mps)", limit=c(0, max(data.opt2$wind_mps_corrected)))  +
+    labs(title="Empirical Power Curve - Data Cleaning Option 2") + 
+    theme_classic() +
+    theme(legend.position="bottom",legend.title=element_blank())
+```
+
+4. Total wind energy produced last year
+
+```{r}
+total.energy.kwh.raw <- data.raw$cum_energy_delivered_kwh[nrow(data.raw)] - data.raw$cum_energy_delivered_kwh[1] + 2*10^7
+total.energy.kwh.clean <- sum(data$energy_delivered_kwh)
+total.energy.kwh.opt1 <- sum(data.opt1$energy_delivered_kwh)
+total.energy.kwh.opt2 <- sum(data.opt2$energy_delivered_kwh)
+data.frame(total.energy.kwh.raw,total.energy.kwh.clean,total.energy.kwh.opt1,total.energy.kwh.opt2)
+```
+
+5. Capacity Factor
+
+```{r}
+cf.raw <- total.energy.kwh.raw/(nrow(data.raw)*(10/60)*turbine.rating*n.turbines)
+cf.clean <- total.energy.kwh.clean/(nrow(data)*(10/60)*turbine.rating*n.turbines)
+cf.opt1 <- total.energy.kwh.opt1/(nrow(data.opt1)*(10/60)*turbine.rating*n.turbines)
+cf.opt2 <- total.energy.kwh.opt2/(nrow(data.opt2)*(10/60)*turbine.rating*n.turbines)
+data.frame(cf.raw,cf.clean,cf.opt1,cf.opt2)
+```
+
+6. Total Possible Energy
+
+```{r}
+total.possible.kwh.clean <- sum(data$power_curve_10min_kwh)
+total.possible.kwh.opt1 <- sum(data.opt1$power_curve_10min_kwh)
+total.possible.kwh.opt2 <- sum(data.opt2$corrected_power_curve_10min_kwh)
+data.frame(total.possible.kwh.clean,total.possible.kwh.opt1,total.possible.kwh.opt2)
+```
+
+7. Uncurtailed Capacity Factor
+
+```{r}
+cf.uncurtailed.clean <- total.possible.kwh.clean/(nrow(data)*(10/60)*turbine.rating*n.turbines)
+cf.uncurtailed.opt1 <- total.possible.kwh.opt1/(nrow(data.opt1)*(10/60)*turbine.rating*n.turbines)
+cf.uncurtailed.opt2 <- total.possible.kwh.opt2/(nrow(data.opt2)*(10/60)*turbine.rating*n.turbines)
+data.frame(cf.uncurtailed.clean,cf.uncurtailed.opt1,cf.uncurtailed.opt2)
+```
+
+8. Turbine Efficiency
+
+```{r}
+data$turbine.eff <- data$energy_delivered_kwh/data$wind_energy_10min_kwh
+data$turbine.eff[which(data$turbine_eff == "NaN")] <- 0
+turbine.eff.clean <- total.energy.kwh.clean/sum(data$wind_energy_10min_kwh)
+data.opt1$turbine.eff <- data.opt1$energy_delivered_kwh/data.opt1$wind_energy_10min_kwh
+data.opt1$turbine.eff[which(data.opt1$turbine_eff == "NaN")] <- 0
+turbine.eff.opt1 <- total.energy.kwh.opt1/sum(data.opt1$wind_energy_10min_kwh)
+data.opt2$turbine.eff <- data.opt2$energy_delivered_kwh/data.opt2$corrected_wind_energy_10min_kwh
+data.opt2$turbine.eff[which(data.opt2$turbine_eff == "NaN")] <- 0
+turbine.eff.opt2 <- total.energy.kwh.opt2/sum(data.opt2$corrected_wind_energy_10min_kwh)
+data.frame(turbine.eff.clean,turbine.eff.opt1,turbine.eff.opt2)
+```
+
+``` {r}
+# Plot turbine efficiency vs. wind speed for uncorrected data
+ggplot(data, aes(x=mean_wind_mps)) + 
+  geom_point(aes(y=turbine.eff, color="Turbine Efficiency")) +
+    geom_hline(aes(yintercept=betz.coef, color="Betz Limit")) +
+  scale_y_continuous(name="Turbine Efficiency", limit=c(0, 1)) + 
+  scale_x_continuous(name="Windspeed (mps)", limit=c(0, max(data$mean_wind_mps)))  +
+    labs(title="Turbine Efficiency vs. Wind Speed - No Correction") + 
+    theme_classic() +
+    theme(legend.position="bottom",legend.title=element_blank())
+```
+
+
+``` {r}
+# plot turbine efficiency vs wind speed for correction option 1
+ggplot(data.opt1, aes(x=mean_wind_mps)) + 
+  geom_point(aes(y=turbine.eff, color="Turbine Efficiency")) +
+    geom_hline(aes(yintercept=betz.coef, color="Betz Limit")) +
+  scale_y_continuous(name="Turbine Efficiency", limit=c(0, 0.6)) + 
+  scale_x_continuous(name="Windspeed (mps)", limit=c(0, max(data.opt1$mean_wind_mps)))  +
+    labs(title="Turbine Efficiency vs. Wind Speed - Correction Option 1") + 
+    theme_classic() +
+    theme(legend.position="bottom",legend.title=element_blank())
+```
+
+``` {r}
+# plot turbine efficiency vs wind speed for correction option 2
+ggplot(data.opt2, aes(x=wind_mps_corrected)) + 
+  geom_point(aes(y=turbine.eff, color="Turbine Efficiency")) +
+    geom_hline(aes(yintercept=betz.coef, color="Betz Limit")) +
+  scale_y_continuous(name="Turbine Efficiency", limit=c(0, 0.6)) + 
+  scale_x_continuous(name="Windspeed (mps)", limit=c(0, max(data.opt2$wind_mps_corrected)))  +
+    labs(title="Turbine Efficiency vs. Wind Speed - Correction Option 2") + 
+    theme_classic() +
+    theme(legend.position="bottom",legend.title=element_blank())
+```
+
+9. Characterization of Weibull distribution
+
+``` {r}
+# Uncorrected data
+# Remove rows with zero wind speed
+data.weibull <- subset(data, mean_wind_mps >= 0.1)
+
+# Weibull fit for uncorrected data
+# Uses package "fitdistrplus"
+weibull.fit<-fitdist(data.weibull$mean_wind_mps, distr="weibull")
+summary(weibull.fit)
+plot(weibull.fit, demp=TRUE)
+```
+
+``` {r}
+# Correction Option 1
+# Remove rows with zero wind speed
+data.opt1.weibull <- subset(data.opt1, mean_wind_mps >= 0.1)
+
+# Weibull fit for corrected data - Option 1
+weibull.fit.opt1<-fitdist(data.opt1.weibull$mean_wind_mps, distr="weibull")
+summary(weibull.fit.opt1)
+plot(weibull.fit.opt1, demp=TRUE)
+```
+
+``` {r}
+# Correction Option 2
+# Remove rows with zero wind speed
+data.opt2.weibull <- subset(data.opt2, wind_mps_corrected >= 0.1)
+
+# Weibull fit for corrected data - Option 2
+weibull.fit.opt2<-fitdist(data.opt2.weibull$wind_mps_corrected, distr="weibull")
+summary(weibull.fit.opt2)
+plot(weibull.fit.opt2, demp=TRUE)
+```
+
+# Part 2: Grid Integration of Wind Energy
+
+We need to get the hourly wind-generated electricity supply from our Option 2 corrected data:
+
+``` {r}
+# Load in the date_time and corrected_wind_energy_10min_kwh from Option 2 for the wind-generated electricity supply
+supply.orig <- data.opt2[,c("date_time","corrected_power_curve_10min_kwh")]
+# Create columns for dates and hours
+supply.orig$date <- as.Date(supply.orig$date_time)
+supply.orig$hour <- hour(supply.orig$date_time)
+# Get hourly wind-generated electricity
+supply.hrly <- ddply(supply.orig, .(date,hour), .fun=summarise,wind.supply.kwh=sum(corrected_power_curve_10min_kwh))
+# Create date.time column from "date" and "hour"
+supply.hrly$date.time <- as.POSIXct(paste(as.character(supply.hrly$date),as.character(supply.hrly$hour),sep=" "),format="%Y-%m-%d %H",tz="UTC")
+```
+
+Create a data frame that will include the wind-generated electricity supply and the island demand:
+
+``` {r}
+# Initiate data frame as a sequence of date-times for each hour of the year
+start.datetime <- as.POSIXct("2013-01-01 0:00", format="%Y-%m-%d %H:%M", tz="UTC")
+end.datetime <- as.POSIXct("2013-12-31 23:00", format="%Y-%m-%d %H:%M", tz="UTC")
+data.pt2 <- as.data.frame(seq(from=start.datetime, to=end.datetime, by=3600))
+names(data.pt2) <- "date.time"
+# Add month and hour columns, as this will be required later
+data.pt2$month <- month(data.pt2$date.time)
+data.pt2$hour <- hour(data.pt2$date.time)
+# Use "match" function to add wind-generated electricity supply to the data frame. If no match, set value to zero (i.e. if we don't have a supply point, assume the supply is zero).
+data.pt2$wind.supply.kwh <- supply.hrly$wind.supply.kwh[match(data.pt2$date.time,supply.hrly$date.time,nomatch=NA)]
+data.pt2$wind.supply.kwh[is.na(data.pt2$wind.supply.kwh)] <- 0
+# Read in demand data and add to data.pt2
+demand.data <- read.csv("island_demand_data.csv")
+data.pt2$demand.kwh <- demand.data$demand.kWh
+```
+
+Calculate the hourly curtailment and capacity factor:
+
+``` {r}
+data.pt2$wind.curtail.kwh <- ifelse(data.pt2$wind.supply.kwh<=data.pt2$demand.kwh,0,data.pt2$wind.supply.kwh-data.pt2$demand.kwh)
+cf.nostorage <- (sum(data.pt2$wind.supply.kwh)-sum(data.pt2$wind.curtail.kwh))/(nrow(data.pt2)*turbine.rating*n.turbines)
+```
+
+Compute hourly curtailment by month and create table:
+
+```{r}
+# Create empty 12 column by 24 row data frame
+hrly.curtail.kwh <- as.data.frame(matrix(0,nrow=24,ncol=12))
+colnames(hrly.curtail.kwh) <- c(1:12)
+rownames(hrly.curtail.kwh) <- c(1:24)
+# Fill in data frame with average hourly curtailment values
+for (i in 1:12)
+{
+    data.month <- data.pt2[which(data.pt2$month==i),]
+    hrly.curtail.kwh[,i] <- ddply(data.month,.(hour),.fun=summarise,curtail.means=mean(wind.curtail.kwh))[,2]
+}
+hrly.curtail.kwh
+```
+
+Compute hourly wind-generated electricity production by month and create table:
+
+```{r}
+# Create empty 12 column by 24 row data frame
+hrly.production.kwh <- as.data.frame(matrix(0,nrow=24,ncol=12))
+colnames(hrly.production.kwh) <- c(1:12)
+rownames(hrly.production.kwh) <- c(1:24)
+# Fill in data frame with average hourly curtailment values
+for (i in 1:12)
+{
+    data.month <- data.pt2[which(data.pt2$month==i),]
+    hrly.production.kwh[,i] <- ddply(data.month,.(hour),.fun=summarise,production.means=mean(wind.supply.kwh))[,2]
+}
+hrly.production.kwh
+```
+
+# Pumped hydro model
+
+``` {r}
+# Pumped hydro storage capacity
+ph.cap.kwh <- 5000
+# Assume initial amount stored is zero
+ph.stor.init.kwh <- 0
+# Pump efficiency
+eff.pump <- 0.85
+# Turbine efficiency
+eff.turb <- 0.90
+# We'll need to develop a 'for' loop, so we'll add columns to our data frame for the amount of energy stored in the pumped hydro system at the start and end of each time step
+data.pt2$ph.stor.start.kwh <- 0
+data.pt2$ph.stor.end.kwh <- 0
+# For loop to determine, at each hour, how much electricity is stored in the pumped hydro system and how much is drawn from the system.
+for (h in 1:nrow(data.pt2))
+    {
+    ifelse(h==1, data.pt2$ph.stor.start.kwh[h] <- ph.stor.init.kwh, data.pt2$ph.stor.start.kwh[h] <- data.pt2$ph.stor.end.kwh[h-1])
+    data.pt2$ph.stor.end.kwh[h] <- ifelse(data.pt2$wind.supply.kwh[h]>data.pt2$demand.kwh[h], min(data.pt2$ph.stor.start.kwh[h] + (data.pt2$wind.supply.kwh[h]-data.pt2$demand.kwh[h])*eff.pump, ph.cap.kwh), max(data.pt2$ph.stor.start.kwh[h] + (data.pt2$wind.supply.kwh[h]-data.pt2$demand.kwh[h])*eff.turb, 0))
+        max(min(data.pt2$ph.stor.start.kwh[h] + (data.pt2$wind.supply.kwh[h]-data.pt2$demand.kwh[h]), ph.cap.kwh),0)
+    data.pt2$wind.curtail.afterph.kwh[h] <- ifelse((data.pt2$ph.stor.end.kwh[h] - data.pt2$ph.stor.start.kwh[h]) > 0, data.pt2$wind.curtail.kwh[h] - (data.pt2$ph.stor.end.kwh[h] - data.pt2$ph.stor.start.kwh[h]), data.pt2$wind.curtail.kwh[h])
+    }
+# Calculate capacity factor with pumped hydro
+cf.withph <- (sum(data.pt2$wind.supply.kwh)-sum(data.pt2$wind.curtail.afterph.kwh))/(nrow(data.pt2)*turbine.rating*n.turbines)
+```
+
+Compare capacity factors to see affects of the pumped hydro storage system:
+
+``` {r}
+# Capaity factor without storage
+cf.nostorage
+# Capacity factor with storage
+cf.withph
+# Absoluate increase in capacity factor
+cf.withph - cf.nostorage
+# Relative increase in capacity factor
+(cf.withph - cf.nostorage)/cf.nostorage
+```
+
+Only a small difference is seen due to the low curtailment levels, due to demand generally being higher than wind-generated electricity supply.

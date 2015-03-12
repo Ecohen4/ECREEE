@@ -1,0 +1,175 @@
+Aggregations in R:
+----
+
+* There are many functions that can do aggregations for you in R; we will cover `ddply()` from the `plyr` package in this tutorial. This is also the function that we have found most useful when writing aggregate indicators for NMIS.
+
+### Creating simple aggregated summary:
+* note: 
+ 1. __(group) by__ variable must have at least one input
+ 2. You __must__ specify what type of aggregation you want to perform, choose one from: summarize, transform, your own complicated function 
+
+ 3. [The link to the package dodument](http://cran.r-project.org/web/packages/plyr/plyr.pdf)
+
+
+
+```{r}
+sample_data <- read.csv("~/work/r/nigeria_r_training/sample_health_facilities.csv")
+library(plyr)
+```
+
+* First example, we use the "transform" keyword to specify adding aggregation to the right of original data
+```{r}
+my_summary <- ddply(sample_data, .(state, lga), transform, 
+                    counts = length(lga_id),
+                    total_num_nurse = sum(num_nurses_fulltime, na.rm=T),
+                    avg_c_section = mean(c_section_yn == T,na.rm=T))
+head(my_summary)
+```
+
+* Look at the output and compare the difference, the only change here is replacing summarize with transform
+```{r}
+my_summary <- ddply(sample_data, .(state, lga), summarise, 
+                    counts = length(lga_id),
+                    total_num_nurse = sum(num_nurses_fulltime, na.rm=T),
+                    avg_c_section = mean(c_section_yn == T,na.rm=T))
+head(my_summary)
+```
+
+* Ddply could take by variable in string format which is very handy when you want to use it in a function
+```{r}
+my_summary <- ddply(sample_data, c("state", "lga"), summarise, 
+                    counts = length(lga_id),
+                    total_num_nurse = sum(num_nurses_fulltime, na.rm=T),
+                    avg_c_section = mean(c_section_yn == T,na.rm=T))
+head(my_summary)
+```
+
+* Ddply could also take formulars wihch conforms the R convention
+```{r}
+my_summary <- ddply(sample_data, ~ state + lga, summarise, 
+                    counts = length(lga_id),
+                    total_num_nurse = sum(num_nurses_fulltime, na.rm=T),
+                    avg_c_section = mean(c_section_yn == T,na.rm=T))
+head(my_summary)
+```
+
+
+### Advanced ddply aggregation, with user defined functions:
+* You are allowed/ encouraged to define your own function in ddply
+* The syntax is pretty much the same as defining functions in R, except 
+* It is __CRITICAL__ to add data.frame() function since ddply combines __data.frame__s, so make sure __include__ __data.frame()__ in the function definition
+* for each small chunk of data splitted by ddply()
+
+```{r}
+my_summary <- ddply(sample_data, .(state), function(df){
+              data.frame(
+                unique_lga_number = nrow(df),
+                avg_c_section = mean(df$c_section_yn == T,na.rm=T),
+                avg_c_section_true = length(which(df$c_section_yn))
+                        )})
+
+head(my_summary)
+```
+### Advanced ddply aggregation, with user idata.frame functions:
+* idata.frame comes from __plyr__ package, insted of making copies in memory, idata.frame simply creates a reference to the original object, thus to boost up the speed.
+* If you have HUGE amount of data for ddply to process and you find it annoying to wait a long time before seeing the result, idata.frame is your solution.
+* Please be noted it comes with the price of slightly complicated code.
+* "An immutable data frame works like an ordinary data frame, except that when you subset it, it returns a reference to the original data frame, not a a copy. This makes subsetting substantially faster and has a big impact when you are working
+with large datasets with many groups."
+
+```{r}
+isample <- idata.frame(sample_data)
+my_summary <- ddply(isample, .(state), function(df){
+                      data.frame(
+                        unique_lga_number = nrow(df),
+                        avg_c_section = mean(df$c_section_yn == T,na.rm=T),
+                        avg_c_section_true = length(which(df$c_section_yn))
+                      )
+                    })
+head(my_summary)
+```
+
+
+* Check the time, the difference with grow bigger with BIG dataset.
+* Note: the first example doesn't actually work, we'll cover it in the next topic.
+```{r, warning=FALSE}
+system.time(replicate(100, ddply(isample, .(state), summarise, mean(num_nurses_fulltime, na.rm=T))))
+
+system.time(replicate(100, ddply(sample_data, .(state), summarise, mean(num_nurses_fulltime, na.rm=T))))
+```
+
+* Draw backs of idata.frame: sometimes certain functions doesn't work with idata.frame
+```{r}
+my_summary <- ddply(isample, .(state), summarise, length(which(c_section_yn)))
+
+my_summary <- ddply(sample_data, .(state), summarise, length(which(c_section_yn)))
+```
+
+### Excercise: How would you calculate the proportion of of c_section_yn==TRUE versus total non-NA records in each state?
+* since the length(which()) doesn't work, what might be the candidate function go get counts of instances of TRUE and FALSE
+* hint from day1: we learned table(), nrow()
+* use table() to get frequency count of TRUE and FALSE values
+* check if 'TRUE' is contained in the table() output, and assign 'TRUE' counts to numerator. If not return 0
+* lastly getting the length of the c_section_yn column, do remember to use na.omit() to skim off the NA values.
+
+```{r}
+my_summary <- ddply(isample, .(state), function(df){ 
+                    my_count <- table(df$c_section_yn)
+                    data.frame(
+                    num_true = if('TRUE' %in% names(my_count)){
+                                my_count[['TRUE']]
+                                }else{
+                                    0
+                                },
+                    total_non_na = length(na.omit(df$c_section_yn))
+                    )})
+head(my_summary)
+```
+
+### Handy functions we created to do calculations with idata.frame
+
+* icount(), function for counting the __TRUE__s in logical variable.
+* Does it look familiar to the solution above?
+* In order to get number of __FALSE__ simple evalute the logical variable.
+```{r}
+icount <- function(predicate) { 
+    counts <- table(predicate)
+    if('TRUE' %in% names(counts)) { counts['TRUE'] }
+    else { 0 }
+}
+
+my_summary <- ddply(isample, .(state), function(df){ 
+                    data.frame(
+                    num_true_c_section = icount(df$c_section_yn),
+                    num_true_c_section = icount(df$c_section_yn == FALSE), 
+                    total_instances = nrow(df)
+                    )})
+head(my_summary)
+```
+
+* ratio(), function for getting ratio of two __logical__ varibles with filter.
+* First argument is the numerator, second argument is the denominator, and the third argument is the __boolean filter_.
+```{r}
+ratio <- function(numerator_col, denominator_col, filter) {
+    df <- data.frame(cbind(num=numerator_col, den=denominator_col))
+    df <- na.omit(df[filter,])
+    if (nrow(df) == 0 | sum(df$den) == 0){
+        return(NA)
+    }
+    return(sum(df$num) / sum(df$den))
+}
+
+
+my_summary <- ddply(isample, .(state), function(df){ 
+                    data.frame(
+                    tru_false_ratio_public = ratio(df$c_section_yn == FALSE, 
+                                                   df$num_nurses_fulltime >= 1, 
+                                                   df$management == "public")
+                    )})
+head(my_summary)
+```
+
+
+
+
+
